@@ -1,42 +1,29 @@
-import requests
+from GBIF_Helper import (
+    get_species_names_in_radius,
+    load_illinois_endangered_set,
+    flag_illinois_endangered,
+)
 
-# Location (example: Chicago)
-latitude = 41.8781
-longitude = -87.6298
-radius_km = 75  # ~25 miles
+lat, lon = 39.579827, -89.308537
+radius_miles = 50
 
-# Step 1: Query GBIF occurrence API
-occurrence_url = "https://api.gbif.org/v1/occurrence/search"
+illinois_set = load_illinois_endangered_set("IsEndangered.csv")
 
-params = {
-    "decimalLatitude": latitude,
-    "decimalLongitude": longitude,
-    "distance": radius_km,
-    "hasCoordinate": "true",
-    "facet": "speciesKey",
-    "facetMincount": 1,
-    "limit": 0
-}
+resolved = get_species_names_in_radius(
+    lat, lon, radius_miles,
+    top_n=500,
+    max_workers=10,
+    # Optional filters to reduce noise:
+    # basis_of_record="HUMAN_OBSERVATION",
+    year_range=(2025, 2026),
+)
 
-response = requests.get(occurrence_url, params=params)
-data = response.json()
-print(data)  # Debug: Print the raw API response to understand its structure
+flagged = flag_illinois_endangered(resolved, illinois_set)
 
-species_counts = data["facets"][0]["counts"]
 
-print("\nSpecies detected within 25 miles:\n")
-print("Species Name | Occurrence Count")
-print("-----------------------------------")
-
-# Step 2: Resolve speciesKey → species name
-for entry in species_counts[:20]:  # limit to top 20 species
-    species_key = entry["name"]
-    count = entry["count"]
-
-    species_url = f"https://api.gbif.org/v1/species/{species_key}"
-    species_response = requests.get(species_url)
-    species_data = species_response.json()
-
-    species_name = species_data.get("canonicalName", "Unknown")
-
-    print(f"{species_name:<30} {count}")
+print(f"{'Species Name':45} {'Count':>8} {'Key':>10} {'IL Listed':>10}")
+print("-" * 80)
+for name, cnt, key, il in flagged:
+    prefix = "⚠ " if il else "  "
+    il_txt = "YES" if il else ""
+    print(f"{prefix}{name[:43]:43} {cnt:8d} {key:>10} {il_txt:>10}")
