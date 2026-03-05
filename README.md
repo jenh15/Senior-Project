@@ -1,5 +1,5 @@
 # Endangered Species Detection Prototype
-> Authors: Jacob Mitchell
+> Authors: Jacob Mitchell    
 > Date: 3/5/26   
 
 
@@ -100,7 +100,7 @@ Tilia americana var. heterophylla
 
 In these cases the species level occurrence is used   
 
-This tool is intended for **early stage environmental screening**, not regulatory compliance, as we **cannot guarantee** false positives or false negatives.
+This tool is intended for **early stage environmental screening**, not regulatory compliance, as we **cannot guarantee** the absence of false positives or false negatives.
 
 ---   
 
@@ -150,5 +150,5 @@ README.md -
 
 
 ### Disclaimer
-Our program provides **informational screening only**  
-Results should **always** be verified with environmental professionals and official regulatory databases before making construction decisions.
+- Our program provides **informational screening only**  
+- Results should **always** be verified with environmental professionals and official regulatory databases before making construction decisions.

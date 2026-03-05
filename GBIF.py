@@ -50,6 +50,7 @@ def gbif_count_occurrences(geometry_wkt: str, taxon_key: int) -> int:
         "geometry": geometry_wkt,
         "taxonKey": taxon_key,
         "hasCoordinate": "true",
+        "year": "2020, 2025", # range
         "limit": 0,  # we only need the total "count"
     }
     j = requests.get(GBIF_OCC_SEARCH, params=params, timeout=30).json()
