@@ -136,7 +136,7 @@ This tool is intended for **early stage environmental screening**, not regulator
 # Running the Prototype
 
 Example usage inside GBIF.py:   
-> Within conda GBIF_env (currently no passed params):   
+> Within conda GBIF_env (and with .env file keys / parameters set):   
 ```
 python GBIF.py
 ```
