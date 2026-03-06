@@ -5,8 +5,16 @@ import math
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Stop early if your key isn't set in environment through .env or cli
+import os
+api_key = os.getenv("OPENAI_API_KEY")
+if "OPENAI_API_KEY" not in os.environ:
+    raise RuntimeError("OPENAI_API_KEY environment variable not set. Please rerun after setting your key.")
+
+
 GBIF_MATCH = "https://api.gbif.org/v1/species/match"
 GBIF_OCC_SEARCH = "https://api.gbif.org/v1/occurrence/search"
+MAX_SPECIES = int(os.getenv("MAX_SPECIES_FOR_AI", 10)) # Highest amount of species that can be sent to our openAI call
 
 def miles_to_km(mi: float) -> float:
     return mi * 1.609344
@@ -50,7 +58,7 @@ def gbif_count_occurrences(geometry_wkt: str, taxon_key: int) -> int:
         "geometry": geometry_wkt,
         "taxonKey": taxon_key,
         "hasCoordinate": "true",
-        "year": "2020, 2025", # range
+        "year": "2020,2025", # range
         "limit": 0,  # we only need the total "count"
     }
     j = requests.get(GBIF_OCC_SEARCH, params=params, timeout=30).json()
@@ -107,6 +115,40 @@ def main():
     print("-" * 60)
     for nm, cnt, key in hits:
         print(f"{nm[:35]:35} {cnt:10d} {key:10d}")
+
+
+    hits = hits[:MAX_SPECIES] # Cap for at most 10 of our species to be sent for additional context for openai
+
+    # openAI --- additional context calls
+    from openai_species_context import enrich_gbif_results_with_openai_batch
+
+    # Convert results into the structure expected by the OpenAI module
+    gbif_result = {
+        "input": {
+            "lat": lat,
+            "lon": lon,
+            "radius_miles": radius_miles,
+            "year_start": 2020,
+            "year_end": 2025
+        },
+        "hits": [
+            {
+                "scientific_name": nm,
+                "gbif_count": cnt,
+                "taxon_key": key
+            }
+            for nm, cnt, key in hits
+        ]
+    }
+
+    enriched = enrich_gbif_results_with_openai_batch(gbif_result)
+
+    print("\nAI Species Context:\n")
+
+    for item in enriched["species_context"]:
+        print(item["scientific_name"])
+        print(item["analysis"])
+        print()
 
 if __name__ == "__main__":
     main()

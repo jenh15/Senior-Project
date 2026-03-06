@@ -18,9 +18,10 @@ Our program automates this first step by:
 1. Accepting a project location    
 2. Searching biodiversity databases for species sightings    
 3. Comparing detected species with the Illinois endangered species list    
-4. Returning flagged species that may impact a project plan    
+4. Returning flagged species that may impact a project plan   
+5. Provide additional context to flagged species to user with additional information on how it may interact with their construction process     
 
-This version focuses on the **data pipeline and detection logic**
+This version focuses on the **data pipeline and detection logic and additional ecological analysis by openai api calls**     
 
 ---   
 
@@ -32,6 +33,7 @@ This version focuses on the **data pipeline and detection logic**
 2. Translate Illinois Endangered list to taxonIDs (map)
 3. Check our bounding box, computed because this is more reliable than GBIF radius, for sightings for each taxonID
 4. Return flagged results and counts
+5. Feed top flagged results (up until MAXAICOUNT configured in .env) in batch to openai api to output additional ecological analysis to user     
 
 ---   
 
@@ -83,6 +85,27 @@ The program extracts the **Scientific Name** column and uses it to identify enda
 ## Endangered species detection
 - Species are only considered from the official **Illinois Endangered Species List**, ignoring all other occurences of different species from **GBIF**
 
+## AI Ecological Context Analysis
+- After endangered species are detected, our system will generate additional context using openAI api to return more information to the user
+- The module `openai_species_context.py` analyzes each flagged species in a batch call with a max count being defined in the .env by the runner
+- The AI analysis may include
+    - Important ecological behaviors
+    - Breeding / migration seasonal considerations
+    - Construction activities that are deemed most disruptive
+    - A cautious recommendation for when construction may be the least disruptive
+- Example output:
+```
+Myotis sodalis
+
+Indiana bats are particularly sensitive to disturbance during maternity
+season when females form roosting colonies in trees. Construction
+activities involving tree clearing, heavy noise, or nighttime lighting
+during late spring and summer may disrupt these colonies. If possible,
+major disturbance activities may be less disruptive outside the
+maternity season, typically late fall through winter.    
+```
+- To ensure performance remains high and reduce costs, the program will send **all** detected species in one single openai request rather than a request for each detected animal
+
 ---   
 
 # Current Limitations
@@ -113,7 +136,7 @@ This tool is intended for **early stage environmental screening**, not regulator
 # Running the Prototype
 
 Example usage inside GBIF.py:   
-> Within conda GBIF_env (currently no passed params):   
+> Within conda GBIF_env (and with .env file keys / parameters set):   
 ```
 python GBIF.py
 ```
@@ -125,16 +148,26 @@ python GBIF.py
 Senior-Project/   
 │   
 ├── GBIF.py   
+├── openai_species_context.py   
+├── .env.example   
 ├── IsEndangered.csv   
 └── README.md   
 
 GBIF.py – main script  
 IsEndangered.csv – Illinois endangered species dataset  
-README.md - 
-> [!CAUTION]
-> TODO:   
+openai_species_context.py - OpenAI ecological context analysis     
+README.md - Project documentation    
+.env.example - Environment variable template for runner parameters    
+
 
 ---   
+
+# Environment Variables
+- Our project uses environmental variables such as max species openai call count and of course our api key
+    - These variables are automatically read by python SDK through vscode reading each members .env file
+    - To configure or view format please see `.env.example` - This can be easily created with `cp .env.example .env` before adding your own keys / parameters.
+
+---
 
 # Future Improvements
 
@@ -142,8 +175,8 @@ README.md -
 - Implement species key / taxonID translation daily rather than during runtime (one time mass API call)
 - Improve subspecies detection  
 - ???Add geospatial visualization??? (map interface)  
-- Integrate generative AI explanations for flagged species  
 - Export construction timeline recommendations  
+- Improve AI ecological analysis using external species data sources (Wikipedia, species databases)
 
 ---   
 
