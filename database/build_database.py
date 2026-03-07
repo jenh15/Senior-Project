@@ -56,6 +56,7 @@ def fetch_species_for_category(category_code):
     url = f"{IUCN_BASE}/red_list_categories/{category_code}"
     
     species_list = []
+    skipped_regional = 0
     page = 1
 
     while True:
@@ -77,6 +78,16 @@ def fetch_species_for_category(category_code):
         for assessment in assessments:
             if not assessment.get('latest', False):
                 continue
+
+            # Only keep global assessments (scope code '1')
+            # Regional assessments can list a species as threatened even if
+            # it is Least Concern globally, which would cause false positives
+            scopes = assessment.get('scopes', [])
+            scope_codes = [s.get('code') for s in scopes]
+            if '1' not in scope_codes:
+                skipped_regional += 1
+                continue
+
             species_list.append({
                 'iucn_id':         assessment['sis_taxon_id'],
                 'scientific_name': assessment['taxon_scientific_name'],
@@ -88,9 +99,11 @@ def fetch_species_for_category(category_code):
             break
 
         page += 1
-        time.sleep(0.5)  # be polite between page calls
+        time.sleep(1.0)  # be polite between page calls
 
-    print(f"  Found {len(species_list)} latest {category_code} species")
+    print(f"  Found {len(species_list)} latest global {category_code} species "
+          f"({skipped_regional} regional assessments skipped)")
+    
     return species_list
 
 

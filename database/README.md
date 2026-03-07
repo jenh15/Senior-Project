@@ -70,6 +70,13 @@ python build_database.py
 - Re-running the script is safe — `INSERT OR IGNORE` prevents duplicates.
 - The database file `threatened_species.db` will be created in the same directory.
 
+### Rate Limiting
+The IUCN API may occasionally return a 429 (Too Many Requests) error during 
+fetching. If this happens the script will stop early and your database will 
+be incomplete for that category. Simply re-run the script — already inserted 
+species will be skipped and it will re-fetch the category from the beginning 
+until it completes successfully.
+
 ### Example Output
 
 ```
@@ -79,7 +86,16 @@ Database created at threatened_species.db
   Fetching CR page 3...
   .
   .
+  Fetching CR page 175...
+  Found 10774 latest global CR species (190 regional assessments skipped)
+  Inserted 9213 new species, skipped 1561 duplicates
   .
+  .
+Database Summary:
+  Total species: 48,646
+  CR: 10774 species
+  EN: 19873 species
+  VU: 17999 species
 ```
 
 ---
@@ -107,8 +123,6 @@ python match_gbif_keys.py
 
 ### Notes
 
-- Loading the backbone file takes 30–60 seconds since it contains 4 million rows.
-- The actual matching after loading is nearly instant.
 - Progress is saved every 500 species so if the script is stopped it can be resumed — it automatically skips species that already have a key.
 - Re-running the script will retry any species previously marked as NONE in case the backbone file has been updated.
 - Expected results: approximately 92% EXACT, 6% FUZZY, 2% NONE.
@@ -131,15 +145,18 @@ Backbone loaded: 2598208 accepted species found
 Lookup dictionary built with 2552706 entries
 Building fallback dictionary from full backbone...
 Fallback dictionary built with 3326580 additional entries
-Found 1096 unmatched or NONE species to process
-  Progress: 500/1096 processed (EXACT: 0, FUZZY: 0, NONE: 500)
-  Progress: 1000/1096 processed (EXACT: 0, FUZZY: 0, NONE: 1000)
-  Progress: 1096/1096 processed (EXACT: 0, FUZZY: 0, NONE: 1096)
-
-Matching Summary (49785 total species):
-  EXACT: 45740
-  FUZZY: 2949
-  NONE: 1096
+Found 48646 unmatched or NONE species to process
+  Progress: 500/48646 processed (EXACT: 440, FUZZY: 38, NONE: 22)
+  Progress: 1000/48646 processed (EXACT: 893, FUZZY: 68, NONE: 39)
+  Progress: 1500/48646 processed (EXACT: 1349, FUZZY: 89, NONE: 62)
+  Progress: 2000/48646 processed (EXACT: 1794, FUZZY: 134, NONE: 72)
+  Progress: 2500/48646 processed (EXACT: 2254, FUZZY: 150, NONE: 96)
+  .
+  .
+Matching Summary (48646 total species):
+  EXACT: 44725
+  FUZZY: 2866
+  NONE: 1055
 
 Done! Your database now has GBIF species keys paired with IUCN threat status.
 ```
@@ -148,4 +165,10 @@ Done! Your database now has GBIF species keys paired with IUCN threat status.
 
 ## Disclaimer
 
-Threatened species data is sourced from the IUCN Red List. Some species may not be matched to a GBIF key due to naming differences between the two databases. These species will not appear in search results. This affects approximately 2% of species in the database.
+- Results reflect species assessed as threatened at the global level by the IUCN Red List. Species that are regionally threatened but globally stable are excluded.
+
+- Global threat status does not equal legal protection. Always consult federal and state wildlife agencies before making construction or land use decisions.
+
+- Threatened species data is sourced from the IUCN Red List. Some species may not be matched to a GBIF key due to naming differences between the two databases. These species will not appear in search results. This affects approximately 2% of species in the database.
+
+
