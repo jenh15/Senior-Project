@@ -68,7 +68,7 @@ def main():
     # Example location
     # TODO:
     lat, lon = 41.8781, -87.6298
-    radius_miles = 5
+    radius_miles = 7
     radius_km = miles_to_km(radius_miles)
     geom = bounding_box_polygon(lat, lon, radius_km)
 
