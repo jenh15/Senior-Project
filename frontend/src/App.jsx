@@ -151,6 +151,7 @@ function pollScanStatus(scanJobId) {
         <div>
           <p className="eyebrow">Environmental Screening Prototype</p>
           <h1>Environmental Screening for Construction Planning</h1>
+          
           <p className="subtext">
             Submit project coordinates to screen for nearby Illinois endangered species and generate AI-assisted ecological planning context for highest occuring species.
           </p>
@@ -333,11 +334,13 @@ function pollScanStatus(scanJobId) {
           </a>
           .
         </p>
-
         <p className="footer-note">
           This is a preliminary screening tool and does not replace official agency review,
           permitting, or provide environmental approval.
         </p>
+        <a href="https://environmentscreen.onrender.com" target="_blank" rel="noreferrer">
+          <img src="../public/environment_screening_logo.png" alt="Logo" width={128} height={128} className="our-logo"/>
+        </a>
       </footer>
     </div>
   );
