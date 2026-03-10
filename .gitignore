@@ -3,3 +3,5 @@ __pycache__
 *.vscode
 .env
 *.pyc
+node_modules
+dist
