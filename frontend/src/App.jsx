@@ -3,8 +3,8 @@ import { useMemo, useState } from "react";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const initialForm = {
-  lat: "38.617110",
-  lon: "-90.207191",
+  lat: "38.792170",
+  lon: "-90.001636",
   radius_miles: "2"
 };
 
@@ -12,6 +12,7 @@ export default function App() {
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasScanned, setHasScanned] = useState(false);
   const [data, setData] = useState({
     gbif_hits: [],
     species_context: []
@@ -32,6 +33,7 @@ export default function App() {
     setError("");
     setData(null);
     setLoading(true);
+    setHasScanned(true);
 
     try {
       if (!backendUrl) {
@@ -71,7 +73,7 @@ export default function App() {
           <p className="eyebrow">Environmental Screening Prototype</p>
           <h1>Environmental Screening for Construction Planning</h1>
           <p className="subtext">
-            Submit project coordinates to screen for nearby Illinois endangered species and receive AI-assisted ecological planning context.
+            Submit project coordinates to screen for nearby Illinois endangered species and generate AI-assisted ecological planning context for highest occuring species.
           </p>
         </div>
       </header>
@@ -141,6 +143,17 @@ export default function App() {
             </div>
           )}
 
+          {!error && form.lat && form.lon && (
+          <iframe
+            width="100%"
+            height="300"
+            style={{ border: 0, borderRadius: "12px" }}
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${
+              form.lon - 0.05
+            },${form.lat - 0.05},${Number(form.lon) + 0.05},${Number(form.lat) + 0.05}&marker=${form.lat},${form.lon}`}
+          />
+          )}
+
 
           {!loading && !error && !data && (
             <div className="empty">
@@ -148,7 +161,7 @@ export default function App() {
             </div>
           )}
 
-          {!loading && data && data?.gbif_hits?.length === 0 && (
+          {!loading && hasScanned && data?.gbif_hits?.length === 0 && (
             <div className="success-box">
               <div className="success-icon">✓</div>
               <div>
@@ -200,6 +213,40 @@ export default function App() {
           )}
         </section>
       </main>
+      <footer className="site-footer">
+        <p>
+          Data sources:{" "}
+          <a href="https://www.gbif.org" target="_blank" rel="noreferrer">
+            GBIF
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://naturalheritage.illinois.gov/dataresearch/access-our-data.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Illinois Natural Heritage
+          </a>
+          .
+        </p>
+
+        <p>
+          Map data ©{" "}
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noreferrer"
+          >
+            OpenStreetMap contributors
+          </a>
+          .
+        </p>
+
+        <p className="footer-note">
+          This is a preliminary screening tool and does not replace official agency review,
+          permitting, or provide environmental approval.
+        </p>
+      </footer>
     </div>
   );
 }

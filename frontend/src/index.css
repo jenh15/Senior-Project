@@ -298,6 +298,79 @@ button:disabled {
   line-height: 1.5;
 }
 
+.site-footer {
+  margin-top: 32px;
+  padding: 20px 0;
+  border-top: 1px solid #d9e3dc;
+  color: #6b7280;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.site-footer a {
+  color: #2e7d32;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
+.footer-logos {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.footer-logo {
+  height: 28px;
+  width: auto;
+}
+
+.map-attribution,
+.footer-note {
+  margin-top: 8px;
+}
+
+/* make the whole page vertical flex */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* main content expands to push footer down */
+main {
+  flex: 1;
+}
+
+/* footer styling */
+.site-footer {
+  width: 100%;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+/* footer links */
+.site-footer a {
+  color: #2e7d32;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
+.footer-note {
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
