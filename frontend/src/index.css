@@ -380,6 +380,34 @@ main {
   font-size: 0.8rem;
 }
 
+.progress-box {
+  padding: 18px;
+  border-radius: 16px;
+  background: #f8fbf8;
+  border: 1px solid #dbe7de;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: #e6efe8;
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2e7d32, #66bb6a);
+  transition: width 0.4s ease;
+}
+
+.progress-step-text {
+  margin: 0;
+  color: #44615a;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;

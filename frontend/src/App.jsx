@@ -19,6 +19,9 @@ export default function App() {
     gbif_hits: [],
     species_context: []
   });
+  const [jobId, setJobId] = useState(null); 
+  const [progress, setProgress] = useState(0);
+  const [stepText, setStepText] = useState("");
 
   const backendUrl = useMemo(() => {
     if (!API_BASE_URL) return "";
@@ -57,13 +60,48 @@ export default function App() {
   return true;
 };
 
+function pollScanStatus(scanJobId) {
+  const interval = setInterval(async () => {
+    try {
+      const statusResponse = await fetch(`${backendUrl}/scan/status/${scanJobId}`);
+
+      if (!statusResponse.ok) {
+        throw new Error("Failed to fetch scan status.");
+      }
+
+      const statusJson = await statusResponse.json();
+
+      setProgress(statusJson.progress || 0);
+      setStepText(statusJson.step || "Processing...");
+
+      if (statusJson.status === "complete") {
+        clearInterval(interval);
+        setData(statusJson.result);
+        setLoading(false);
+      }
+
+      if (statusJson.status === "error") {
+        clearInterval(interval);
+        setError(statusJson.error || "Scan failed.");
+        setLoading(false);
+      }
+    } catch (err) {
+      clearInterval(interval);
+      setError(err.message || "Polling failed.");
+      setLoading(false);
+    }
+  }, 1000);
+}
+
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
-    setData(null);
+    setData({ gbif_hits: [], species_context: [] });
     setLoading(true);
     setHasScanned(true);
+    setProgress(0);
+    setStepText("Starting scan...");
 
     try {
       if (!backendUrl) {
@@ -73,8 +111,7 @@ export default function App() {
         setLoading(false);
         return;
       }
-
-      const response = await fetch(`${backendUrl}/scan`, {
+      const startResponse = await fetch(`${backendUrl}/scan/start`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -86,16 +123,24 @@ export default function App() {
         })
       });
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Request failed.");
+      if (!startResponse.ok) {
+        const text = await startResponse.text();
+        throw new Error(text || "Failed to start scan.");
       }
 
-      const json = await response.json();
-      setData(json);
+      const startJson = await startResponse.json();
+      const newJobID = startJson.job_id;
+
+      if (!newJobID) {
+        throw new Error("Backend did not return a job ID");
+      }
+
+      setJobId(newJobID);
+      // Polling loop
+      pollScanStatus(newJobID);
+
     } catch (err) {
       setError(err.message || "Something went wrong.");
-    } finally {
       setLoading(false);
     }
   }
@@ -186,6 +231,19 @@ export default function App() {
               form.lon - 0.05
             },${form.lat - 0.05},${Number(form.lon) + 0.05},${Number(form.lat) + 0.05}&marker=${form.lat},${form.lon}`}
           />
+          )}
+
+          {loading && (
+            <div className="progress-box">
+              <h3>Processing scan...</h3>
+              <div className="progress-bar">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <p className="progress-step-text">{stepText}</p>
+            </div>
           )}
 
 

@@ -83,49 +83,36 @@ def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> 
     counts = j.get("facets", [])[0].get("counts", [])
     return [(int(row["name"]), int(row["count"])) for row in counts if row.get("name")]
 
-def main():
-    # Example location
-    # TODO:
-    lat, lon = 38.617110, -90.207191
-    radius_miles = 5
 
-    #geom = bounding_box_polygon(lat, lon, radius_km)
 
-    # 1) Load IL endangered species scientific names / taxon IDS (precomputed for speed)
+def run_scan(lat, lon, radius_miles, progress_callback=None):
+    if progress_callback:
+        progress_callback("Loading Illinois taxon lookup", 10)
+
     name_to_key, key_to_name = load_precomputed_taxon_keys("IllinoisTaxonLookup.csv")
-    print(f"Loaded Illinois Taxon Keys: {len(name_to_key)} species")
 
-    # 2) GBIF Query to get species counts in area - ONE CALL to get ALL species keys + counts in area (instead of iterating through each species and making separate calls)
+    if progress_callback:
+        progress_callback("Querying GBIF species in area", 35)
+
     area_species = gbif_species_counts_in_area(lat, lon, radius_miles)
-    print(f"GBIF species keys in area: {len(area_species)}")
 
-    # 3) Cross reference GBIF species keys with IL endangered species keys to get final hits with counts and names (intersect locally)
+    if progress_callback:
+        progress_callback("Cross-referencing Illinois endangered species", 60)
+
     hits = []
-    
     for taxon_key, count in area_species:
         if taxon_key in key_to_name:
             name = key_to_name[taxon_key]
             hits.append((name, count, taxon_key))
 
     hits.sort(key=lambda x: x[1], reverse=True)
+    hits = hits[:MAX_SPECIES]
 
-    print(f"\nIL endangered species with GBIF occurrences in ~{radius_miles} miles:\n")
-    if not hits:
-        print("No matches found.")
-        return
+    if progress_callback:
+        progress_callback("Generating AI ecological context", 85)
 
-    print(f"{'Scientific Name':35} {'GBIF Count':>10} {'taxonKey':>10}")
-    print("-" * 60)
-    for nm, cnt, key in hits:
-        print(f"{nm[:35]:35} {cnt:10d} {key:10d}")
-
-
-    hits = hits[:MAX_SPECIES] # Cap for at most 10 of our species to be sent for additional context for openai
-
-    # openAI --- additional context calls
     from openai_species_context import enrich_gbif_results_with_openai_batch
 
-    # Convert results into the structure expected by the OpenAI module
     gbif_result = {
         "input": {
             "lat": lat,
@@ -146,9 +133,46 @@ def main():
 
     enriched = enrich_gbif_results_with_openai_batch(gbif_result)
 
-    print("\nAI Species Context:\n")
+    if progress_callback:
+        progress_callback("Finalizing results", 100)
 
-    for item in enriched["species_context"]:
+    return {
+        "input": gbif_result["input"],
+        "gbif_hits": [
+            {
+                "scientific_name": nm,
+                "gbif_count": cnt,
+                "taxon_key": key
+            }
+            for nm, cnt, key in hits
+        ],
+        "species_context": enriched["species_context"]
+    }
+
+def main():
+    lat, lon = 38.617110, -90.207191
+    radius_miles = 5
+
+    result = run_scan(lat, lon, radius_miles)
+
+    print(f"\nIllinois endangered species with GBIF occurrences in ~{radius_miles} miles:\n")
+
+    hits = result["gbif_hits"]
+    if not hits:
+        print("No matches found.")
+        return
+
+    print(f"{'Scientific Name':35} {'GBIF Count':>10} {'taxonKey':>10}")
+    print("-" * 60)
+    for item in hits:
+        print(
+            f"{item['scientific_name'][:35]:35} "
+            f"{item['gbif_count']:10d} "
+            f"{item['taxon_key']:10d}"
+        )
+
+    print("\nAI Species Context:\n")
+    for item in result["species_context"]:
         print(item["scientific_name"])
         print(item["analysis"])
         print()
