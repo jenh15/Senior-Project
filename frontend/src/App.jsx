@@ -52,8 +52,8 @@ export default function App() {
     return false;
   }
 
-  if (isNaN(parseFloat(form.radius_miles)) || parseFloat(form.radius_miles) < 0) {
-    setError("Radius must be a positive number");
+  if (isNaN(parseFloat(form.radius_miles)) || parseFloat(form.radius_miles) < 0 || parseFloat(form.radius_miles) > 100) {
+    setError("Radius must be a positive number and less than 100 miles");
     return false;
   }
 
@@ -253,7 +253,7 @@ function pollScanStatus(scanJobId) {
             </div>
           )}
 
-          {!loading && hasScanned && data?.gbif_hits?.length === 0 && (
+          {!error && !loading && hasScanned && data?.gbif_hits?.length === 0 && (
             <div className="success-box">
               <div className="success-icon">✓</div>
               <div>
