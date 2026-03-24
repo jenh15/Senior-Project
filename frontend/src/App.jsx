@@ -152,7 +152,8 @@ function pollScanStatus(scanJobId) {
         body: JSON.stringify({
           lat: Number(form.lat),
           lon: Number(form.lon),
-          radius_miles: Number(form.radius_miles)
+          radius_miles: Number(form.radius_miles),
+          captcha_token: captchaToken
         })
       });
 
