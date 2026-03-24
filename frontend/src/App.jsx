@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import gbifLogo from "./assets/gbif-dot-org-green-logo.svg";
 import inhsLogo from "./assets/dnr-nav-logo.jpeg";
+import ourLogo from "./assets/environment_screening_logo.png";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 
-const initialForm = {
+const initialForm = { // SIUE engineering building
   lat: "38.792170",
   lon: "-90.001636",
   radius_miles: "2"
@@ -22,11 +24,36 @@ export default function App() {
   const [jobId, setJobId] = useState(null); 
   const [progress, setProgress] = useState(0);
   const [stepText, setStepText] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+
+  const turnstileRef = useRef(null);
+  const widgetIdRef = useRef(null);
 
   const backendUrl = useMemo(() => {
     if (!API_BASE_URL) return "";
     return API_BASE_URL.replace(/\/$/, "");
   }, []);
+
+
+    useEffect(() => {
+    if (!window.turnstile || !turnstileRef.current || !TURNSTILE_SITE_KEY) return;
+
+    if (widgetIdRef.current !== null) return;
+
+    widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (token) => {
+        setCaptchaToken(token);
+      },
+      "expired-callback": () => {
+        setCaptchaToken("");
+      },
+      "error-callback": () => {
+        setCaptchaToken("");
+      },
+    });
+  }, []);
+
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -107,9 +134,15 @@ function pollScanStatus(scanJobId) {
       if (!backendUrl) {
         throw new Error("Missing VITE_API_BASE_URL. Add it to a .env file.");
       }
+      if (!TURNSTILE_SITE_KEY) {
+        throw new Error("Missing VITE_TURNSTILE_SITE_KEY. Add it to a .env file.");
+      }
       if (!validateInputs()) {
         setLoading(false);
         return;
+      }
+      if (!captchaToken) {
+        throw new Error("Please complete CAPTCHA");
       }
       const startResponse = await fetch(`${backendUrl}/scan/start`, {
         method: "POST",
@@ -136,6 +169,12 @@ function pollScanStatus(scanJobId) {
       }
 
       setJobId(newJobID);
+
+      if (window.turnstile && widgetIdRef.current !== null) {
+        window.turnstile.reset(widgetIdRef.current);
+      }
+      setCaptchaToken("");
+
       // Polling loop
       pollScanStatus(newJobID);
 
@@ -192,11 +231,15 @@ function pollScanStatus(scanJobId) {
               />
             </label>
 
+            <div ref={turnstileRef} className="captcha-container"></div>
+
             <button className="button" type="submit" disabled={loading}>
               {loading ? "Running Screen..." : "Run Environmental Screen"}
             </button>
           </form>
-
+          {/* {error && <p>{error}</p>}
+          {loading && <p>{stepText}</p>} */}
+          
           <div className="helper">
             <strong>Backend URL:</strong>{" "}
             {backendUrl || "Not set. Create .env from .env.example first."}
@@ -339,7 +382,7 @@ function pollScanStatus(scanJobId) {
           permitting, or provide environmental approval.
         </p>
         <a href="https://environmentscreen.onrender.com" target="_blank" rel="noreferrer">
-          <img src="../public/environment_screening_logo.png" alt="Logo" width={128} height={128} className="our-logo"/>
+          <img src={ourLogo} alt="Logo" width={128} height={128} className="our-logo"/>
         </a>
       </footer>
     </div>

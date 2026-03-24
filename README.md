@@ -86,6 +86,25 @@ The program precomputes a translated list, scientific name followed by taxonID, 
 ## Geometry based queries
 - A bounding box is generated from the radius to perform more reliable GBIF searches.
 
+## Bot Protection & API Security
+> To prevent automated abuse of our environmental screening API, I've implemented human verification along with rate limiting.    
+- Features Added:
+    - Cloudflare Turnstile integration
+        - Invisible / low friction human verification (no captchas)
+        - Token generated on frontend then verified on backend
+    - Backend token validation
+        - All `/scan/start` requests now require a valid Turnstile token
+    - Rate limiting
+        - Limits applied per IP to prevent excessive calling abuse
+    - CORS hardened
+        - Restricted to approved frontend origin only
+- How it works:
+    - User submits scan request from frontend
+    - Turnstile generates a verification token
+    - Token is sent with the request to the backend
+    - Backend validates token with Cloudflare
+    - If valid proceed, if not reject
+
 ## Precomputed species lookup for Illinois Endangered Species List
 - Species names are resolved to their taxonIDs prior to user input to improve performance.
 
