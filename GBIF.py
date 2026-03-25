@@ -6,6 +6,8 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Stop early if your key isn't set in environment through .env or cli
+from dotenv import load_dotenv
+load_dotenv()
 import os
 api_key = os.getenv("OPENAI_API_KEY")
 if "OPENAI_API_KEY" not in os.environ:
