@@ -1,4 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
+import "leaflet/dist/leaflet.css";
+import ScreeningMap from "./ScreeningMap";
 import gbifLogo from "./assets/gbif-dot-org-green-logo.svg";
 import inhsLogo from "./assets/dnr-nav-logo.jpeg";
 import ourLogo from "./assets/environment_screening_logo.png";
@@ -7,6 +9,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 
 const initialForm = { // SIUE engineering building
+  address: "Engineering Building, Southern Illinois University Edwardsville",
   lat: "38.792170",
   lon: "-90.001636",
   radius_miles: "2"
@@ -16,6 +19,7 @@ export default function App() {
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [inputMode, setInputMode] = useState("address");
   const [hasScanned, setHasScanned] = useState(false);
   const [data, setData] = useState({
     gbif_hits: [],
@@ -58,6 +62,7 @@ export default function App() {
   function updateField(event) {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    resetResults();
   }
 
   const validateInputs = () => {
@@ -118,6 +123,100 @@ function pollScanStatus(scanJobId) {
       setLoading(false);
     }
   }, 1000);
+}
+
+async function handleAddressLookup() {
+  try {
+    setError("");
+
+    if (!form.address.trim()) {
+      throw new Error("Please enter an address.");
+    }
+
+    const response = await fetch(
+      `${backendUrl}/geocode/search?q=${encodeURIComponent(form.address)}`
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Address lookup failed.");
+    }
+
+    const data = await response.json();
+
+    if (!data.best_match) {
+      throw new Error("No matching address found.");
+    }
+
+    const best = data.best_match;
+
+    setForm((prev) => ({
+      ...prev,
+      address: best.label || prev.address,
+      lat: String(best.lat),
+      lon: String(best.lon),
+    }));
+    resetResults();
+    // later:
+    // update map center / marker here
+  } catch (err) {
+    setError(err.message || "Address lookup failed.");
+  }
+}
+
+async function handleCoordinateLookup() {
+  try {
+    setError("");
+
+    const lat = Number(form.lat);
+    const lon = Number(form.lon);
+
+    if (Number.isNaN(lat) || Number.isNaN(lon)) {
+      throw new Error("Latitude and longitude must be numeric.");
+    }
+
+    const response = await fetch(
+      `${backendUrl}/geocode/reverse?lat=${lat}&lon=${lon}`
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Reverse geocoding failed.");
+    }
+
+    const data = await response.json();
+
+    if (!data.best_match) {
+      throw new Error("No address found for those coordinates.");
+    }
+
+    const best = data.best_match;
+
+    setForm((prev) => ({
+      ...prev,
+      address: best.label || prev.address,
+      lat: String(best.lat),
+      lon: String(best.lon),
+    }));
+    resetResults();
+
+    // later:
+    // update map center / marker here
+  } catch (err) {
+    setError(err.message || "Coordinate lookup failed.");
+  }
+}
+
+function resetResults() {
+  setError("");
+  setHasScanned(false);
+  setData({
+    gbif_hits: [],
+    species_context: [],
+  });
+  setJobId(null);
+  setProgress(0);
+  setStepText("");
 }
 
 
@@ -202,25 +301,71 @@ function pollScanStatus(scanJobId) {
         <section className="card">
           <h2>Project Input</h2>
           <form onSubmit={handleSubmit} className="form">
-            <label>
-              Latitude
-              <input
-                name="lat"
-                value={form.lat}
-                onChange={updateField}
-                placeholder="41.8781"
-              />
-            </label>
+            <div className="mode-toggle">
+              <button
+                type="button"
+                className={inputMode === "address" ? "active" : ""}
+                onClick={() => setInputMode("address")}
+              >
+                Address
+              </button>
+              <button
+                type="button"
+                className={inputMode === "coordinates" ? "active" : ""}
+                onClick={() => setInputMode("coordinates")}
+              >
+                Coordinates
+              </button>
+            </div>
 
-            <label>
-              Longitude
-              <input
-                name="lon"
-                value={form.lon}
-                onChange={updateField}
-                placeholder="-87.6298"
-              />
-            </label>
+              {inputMode === "address" ? (
+              <>
+                <label>Address</label>
+                <input
+                  name="address"
+                  value={form.address}
+                  onChange={updateField}
+                  placeholder="123 Main St, Edwardsville, IL"
+                />
+                <button type="button" className="btn-secondary" onClick={handleAddressLookup}>
+                  Find Address
+                </button>
+
+                {(form.lat && form.lon) && (
+                  <div className="lookup-preview">
+                    <small>Matched coordinates: {form.lat}, {form.lon}</small>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <label>Latitude</label>
+                <input
+                  name="lat"
+                  value={form.lat}
+                  onChange={updateField}
+                  placeholder="41.8781"
+                />
+
+                <label>Longitude</label>
+                <input
+                  name="lon"
+                  value={form.lon}
+                  onChange={updateField}
+                  placeholder="-87.6298"
+                />
+
+                <button type="button" className="btn-secondary" onClick={handleCoordinateLookup}>
+                  Find Address From Coordinates
+                </button>
+
+                {form.address && (
+                  <div className="lookup-preview">
+                    <small>Matched address: {form.address}</small>
+                  </div>
+                )}
+              </>
+            )}
 
             <label>
               Radius (miles)
@@ -268,14 +413,47 @@ function pollScanStatus(scanJobId) {
           )}
 
           {!error && form.lat && form.lon && (
-          <iframe
-            width="100%"
-            height="300"
-            style={{ border: 0, borderRadius: "12px" }}
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${
-              form.lon - 0.05
-            },${form.lat - 0.05},${Number(form.lon) + 0.05},${Number(form.lat) + 0.05}&marker=${form.lat},${form.lon}`}
-          />
+            <ScreeningMap
+              lat={Number(form.lat)}
+              lon={Number(form.lon)}
+              radiusMiles={Number(form.radius_miles)}
+              onPickLocation={async (lat, lon) => {
+                resetResults();
+                // 1. update coordinates immediately (fast UI response)
+                setForm((prev) => ({
+                  ...prev,
+                  lat: lat.toFixed(6),
+                  lon: lon.toFixed(6),
+                }));
+
+                try {
+                  // 2. call your backend reverse geocode
+                  const response = await fetch(
+                    `${backendUrl}/geocode/reverse?lat=${lat}&lon=${lon}`
+                  );
+
+                  if (!response.ok) return;
+
+                  const data = await response.json();
+
+                  if (!data.best_match) return;
+
+                  const best = data.best_match;
+
+                  // 3. update address AFTER lookup completes
+                  setForm((prev) => ({
+                    ...prev,
+                    lat: lat.toFixed(6),
+                    lon: lon.toFixed(6),
+                    address: best.label || prev.address,
+                  }));
+                } catch (err) {
+                  // silent fail to not disrupt ux
+                  console.error("Reverse geocode failed", err);
+                }
+              }}
+            />
+          
           )}
 
           {loading && (
