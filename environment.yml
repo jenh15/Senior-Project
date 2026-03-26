@@ -4,6 +4,5 @@ channels:
 dependencies:
   - httpx
   - requests
-  - openai
   - nodejs
 prefix: C:\Users\jacob\miniconda3\envs\GBIF_env

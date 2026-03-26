@@ -18,7 +18,17 @@ const initialForm = { // SIUE engineering building
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState({
+      general: "",
+      addressLookup: "",
+      coordinateLookup: "",
+      environmentScan: "",
+  });
+  const [cooldowns, setCooldowns] = useState({
+  addressLookup: 0,
+  coordinateLookup: 0,
+  environmentScan: 0,
+});
   const [inputMode, setInputMode] = useState("address");
   const [hasScanned, setHasScanned] = useState(false);
   const [data, setData] = useState({
@@ -39,7 +49,7 @@ export default function App() {
   }, []);
 
 
-    useEffect(() => {
+  useEffect(() => {
     if (!window.turnstile || !turnstileRef.current || !TURNSTILE_SITE_KEY) return;
 
     if (widgetIdRef.current !== null) return;
@@ -56,41 +66,110 @@ export default function App() {
         setCaptchaToken("");
       },
     });
+    }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+    setCooldowns((prev) => {
+      const updated = { ...prev };
+
+      Object.keys(updated).forEach((key) => {
+        if (updated[key] > 0) updated[key] -= 1;
+      });
+
+      return updated;
+    });
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
 
-  function updateField(event) {
+function updateField(event) {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
     resetResults();
   }
 
-  const validateInputs = () => {
+function setGeneralError(message) {
+  setError((prev) => ({
+    ...prev,
+    general: message,
+  }));
+}
+
+function clearGeneralError() {
+  setErrors((prev) => ({
+    ...prev,
+    general: "",
+  }));
+}
+
+const validateInputs = () => {
   const lat = parseFloat(form.lat);
   const lon = parseFloat(form.lon);
 
   if (isNaN(lat) || isNaN(lon)) {
-    setError("Latitude and longitude must be numeric");
+    setGeneralError("Latitude and longitude must be numeric");
     return false;
   }
 
   if (lat < -90 || lat > 90) {
-    setError("Latitude must be between -90 and 90");
+    setGeneralError("Latitude must be between -90 and 90");
     return false;
   }
 
   if (lon < -180 || lon > 180) {
-    setError("Longitude must be between -180 and 180");
+    setGeneralError("Longitude must be between -180 and 180");
     return false;
   }
 
   if (isNaN(parseFloat(form.radius_miles)) || parseFloat(form.radius_miles) < 0 || parseFloat(form.radius_miles) > 100) {
-    setError("Radius must be a positive number and less than 100 miles");
+    setGeneralError("Radius must be a positive number and less than 100 miles");
     return false;
   }
 
   return true;
 };
+
+async function checkApiResponse(response, action) {
+    if (response.ok) return response;
+
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After");
+      handleRateLimit(action, retryAfter);
+      throw new Error("Rate limited");
+    }
+
+    const text = await response.text();
+    throw new Error(text || "Request failed.");
+  }
+
+function handleRateLimit(action, retryAfter = null) {
+  const fallback = {
+    addressLookup: 60,
+    coordinateLookup: 60,
+    environmentScan: 3600,
+  };
+
+  const labels = {
+    addressLookup: "Address lookup",
+    coordinateLookup: "Coordinate lookup",
+    environmentScan: "Environment scan",
+  };
+
+  const seconds = retryAfter ? parseInt(retryAfter, 10) : fallback[action];
+
+  setCooldowns((prev) => ({
+    ...prev,
+    [action]: seconds,
+  }));
+
+  setError((prev) => ({
+    ...prev,
+    [action]: `${labels[action]} is rate limited. Try again in ${seconds} seconds.`,
+  }));
+}
 
 function pollScanStatus(scanJobId) {
   const interval = setInterval(async () => {
@@ -114,12 +193,12 @@ function pollScanStatus(scanJobId) {
 
       if (statusJson.status === "error") {
         clearInterval(interval);
-        setError(statusJson.error || "Scan failed.");
+        setGeneralError("Scan failed.");
         setLoading(false);
       }
     } catch (err) {
       clearInterval(interval);
-      setError(err.message || "Polling failed.");
+      setGeneralError("Polling failed.");
       setLoading(false);
     }
   }, 1000); // Poll every 1 second
@@ -127,7 +206,7 @@ function pollScanStatus(scanJobId) {
 
 async function handleAddressLookup() {
   try {
-    setError("");
+    setError((prev) => ({ ...prev, addressLookup: "" }));
 
     if (!form.address.trim()) {
       throw new Error("Please enter an address.");
@@ -137,10 +216,7 @@ async function handleAddressLookup() {
       `${backendUrl}/geocode/search?q=${encodeURIComponent(form.address)}`
     );
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Address lookup failed.");
-    }
+    await checkApiResponse(response, "addressLookup");
 
     const data = await response.json();
 
@@ -160,13 +236,18 @@ async function handleAddressLookup() {
     // later:
     // update map center / marker here
   } catch (err) {
-    setError(err.message || "Address lookup failed.");
+      if (err.message !== "Rate limited") {
+      setError((prev) => ({
+        ...prev,
+        addressLookup: err.message,
+      }));
+    }
   }
 }
 
 async function handleCoordinateLookup() {
   try {
-    setError("");
+    setError((prev) => ({ ...prev, coordinateLookup: "" }));
 
     const lat = Number(form.lat);
     const lon = Number(form.lon);
@@ -179,10 +260,7 @@ async function handleCoordinateLookup() {
       `${backendUrl}/geocode/reverse?lat=${lat}&lon=${lon}`
     );
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Reverse geocoding failed.");
-    }
+    await checkApiResponse(response, "coordinateLookup");
 
     const data = await response.json();
 
@@ -203,12 +281,17 @@ async function handleCoordinateLookup() {
     // later:
     // update map center / marker here
   } catch (err) {
-    setError(err.message || "Coordinate lookup failed.");
+      if (err.message !== "Rate limited") {
+        setError((prev) => ({
+          ...prev,
+          coordinateLookup: err.message,
+        }));
+      }
   }
 }
 
 function resetResults() {
-  setError("");
+  setError({general: "", addressLookup: "", coordinateLookup: "", environmentScan: "" });
   setHasScanned(false);
   setData({
     gbif_hits: [],
@@ -220,9 +303,9 @@ function resetResults() {
 }
 
 
-  async function handleSubmit(event) {
+async function handleSubmit(event) {
     event.preventDefault();
-    setError("");
+    setError({ general: "", addressLookup: "", coordinateLookup: "", environmentScan: "" });
     setData({ gbif_hits: [], species_context: [] });
     setLoading(true);
     setHasScanned(true);
@@ -256,10 +339,7 @@ function resetResults() {
         })
       });
 
-      if (!startResponse.ok) {
-        const text = await startResponse.text();
-        throw new Error(text || "Failed to start scan.");
-      }
+      await checkApiResponse(startResponse, "environmentScan");
 
       const startJson = await startResponse.json();
       const newJobID = startJson.job_id;
@@ -279,11 +359,17 @@ function resetResults() {
       pollScanStatus(newJobID);
 
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+        if (err.message !== "Rate limited") {
+        setError((prev) => ({
+          ...prev,
+          environmentScan: err.message,
+        }));
+      }
       setLoading(false);
     }
   }
 
+  // Start of page render
   return (
     <div className="page">
       <header className="hero">
@@ -327,13 +413,15 @@ function resetResults() {
                   onChange={updateField}
                   placeholder="123 Main St, Edwardsville, IL"
                 />
-                <button type="button" className="btn-secondary" onClick={handleAddressLookup}>
-                  Find Address
+                <button type="button" className="btn-secondary" onClick={handleAddressLookup} disabled={cooldowns.addressLookup > 0}>
+                  {cooldowns.addressLookup > 0
+                    ? `Try again in ${cooldowns.addressLookup}s`
+                    : "Find Address"}
                 </button>
 
                 {(form.lat && form.lon) && (
                   <div className="lookup-preview">
-                    <small>Matched coordinates: {form.lat}, {form.lon}</small>
+                    <small>Matched coordinates: {parseFloat(form.lat).toFixed(4)}, {parseFloat(form.lon).toFixed(4)}</small>
                   </div>
                 )}
               </>
@@ -355,8 +443,10 @@ function resetResults() {
                   placeholder="-87.6298"
                 />
 
-                <button type="button" className="btn-secondary" onClick={handleCoordinateLookup}>
-                  Find Address From Coordinates
+                <button type="button" className="btn-secondary" onClick={handleCoordinateLookup} disabled={cooldowns.coordinateLookup > 0}>
+                  {cooldowns.coordinateLookup > 0
+                    ? `Try again in ${cooldowns.coordinateLookup}s`
+                    : "Find Address From Coordinates"}
                 </button>
 
                 {form.address && (
@@ -379,9 +469,19 @@ function resetResults() {
 
             <div ref={turnstileRef} className="captcha-container"></div>
 
-            <button className="button" type="submit" disabled={loading}>
-              {loading ? "Running Screen..." : "Run Environmental Screen"}
+            <button className="button" type="submit" disabled={loading || cooldowns.environmentScan > 0}>
+              {cooldowns.environmentScan > 0
+                ? `Try again in ${cooldowns.environmentScan}s`
+                : loading
+                ? "Running Screen..."
+                : "Run Environmental Screen"}
             </button>
+
+            {/* {error.environmentScan && (
+              <div className="error">
+                {error.environmentScan}
+              </div>
+            )} */}
           </form>
           {/* {error && <p>{error}</p>}
           {loading && <p>{stepText}</p>} */}
@@ -403,7 +503,11 @@ function resetResults() {
         <section className="card">
           <h2>Results</h2>
 
-          {error && <div className="error">{error}</div>}
+          {Object.values(error).some(Boolean) && (
+            <div className="error">
+              {error.general || error.addressLookup || error.coordinateLookup || error.environmentScan}
+            </div>
+          )}
 
           {loading && (
             <div className="loading-box">
@@ -412,7 +516,7 @@ function resetResults() {
             </div>
           )}
 
-          {!error && form.lat && form.lon && (
+          { form.lat && form.lon && ( // !Object.values(error).some(Boolean) - Removes upon error
             <ScreeningMap
               lat={Number(form.lat)}
               lon={Number(form.lon)}
@@ -469,14 +573,7 @@ function resetResults() {
             </div>
           )}
 
-
-          {!loading && !error && !data && (
-            <div className="empty">
-              No results yet. Enter coordinates and run the screening workflow.
-            </div>
-          )}
-
-          {!error && !loading && hasScanned && data?.gbif_hits?.length === 0 && (
+          {!Object.values(error).some(Boolean) && !loading && hasScanned && data?.gbif_hits?.length === 0 && (
             <div className="success-box">
               <div className="success-icon">✓</div>
               <div>
