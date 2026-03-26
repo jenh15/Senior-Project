@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from "react";
+import { Toaster, toast } from "react-hot-toast";
 import "leaflet/dist/leaflet.css";
 import ScreeningMap from "./ScreeningMap";
 import gbifLogo from "./assets/gbif-dot-org-green-logo.svg";
@@ -24,6 +25,19 @@ export default function App() {
       coordinateLookup: "",
       environmentScan: "",
   });
+  const lastToastRef = useRef("");
+  useEffect(() => { // Convert err to toast notification
+  const message =
+    error.general ||
+    error.addressLookup ||
+    error.coordinateLookup ||
+    error.environmentScan;
+
+  if (message && message !== lastToastRef.current) {
+    lastToastRef.current = message;
+    showToast(message, "error");
+  }
+}, [error]);
   const [cooldowns, setCooldowns] = useState({
   addressLookup: 0,
   coordinateLookup: 0,
@@ -39,6 +53,8 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [stepText, setStepText] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
+
+  const [notifications, setNotifications] = useState([]);
 
   const turnstileRef = useRef(null);
   const widgetIdRef = useRef(null);
@@ -167,8 +183,26 @@ function handleRateLimit(action, retryAfter = null) {
 
   setError((prev) => ({
     ...prev,
-    [action]: `${labels[action]} is rate limited. Try again in ${seconds} seconds.`,
+    [action]: `${labels[action]} is rate limited. Try again in ${formatCooldown(seconds)}`,
   }));
+
+  // showToast("Rate limited. Try again later.", "error");
+}
+
+function formatCooldown(seconds) {
+  if (seconds >= 3600) {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+
+  if (seconds >= 60) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+  }
+
+  return `${seconds}s`;
 }
 
 function pollScanStatus(scanJobId) {
@@ -189,6 +223,7 @@ function pollScanStatus(scanJobId) {
         clearInterval(interval);
         setData(statusJson.result);
         setLoading(false);
+        showToast("Environmental screen completed.", "success");
       }
 
       if (statusJson.status === "error") {
@@ -242,6 +277,7 @@ async function handleAddressLookup() {
         addressLookup: err.message,
       }));
     }
+    //showToast("Error occurred while looking up address.", "error");
   }
 }
 
@@ -287,6 +323,7 @@ async function handleCoordinateLookup() {
           coordinateLookup: err.message,
         }));
       }
+      //showToast("Error occurred while looking up coordinates.", "error");
   }
 }
 
@@ -302,6 +339,27 @@ function resetResults() {
   setStepText("");
 }
 
+function showToast(message, type = "error") {
+  if (!message) return;
+
+  pushNotification(message, type);
+
+  if (type === "success") return toast.success(message);
+  if (type === "loading") return toast.loading(message);
+  toast.error(message || "An error occurred");
+
+}
+
+function pushNotification(message, type = "error") {
+  const item = {
+    id: Date.now() + Math.random(),
+    message,
+    type,
+    createdAt: new Date().toLocaleTimeString(),
+  };
+
+  setNotifications((prev) => [item, ...prev].slice(0, 20));
+}
 
 async function handleSubmit(event) {
     event.preventDefault();
@@ -365,12 +423,25 @@ async function handleSubmit(event) {
           environmentScan: err.message,
         }));
       }
+      //showToast("Error occurred while starting environment scan.", "error");
       setLoading(false);
     }
   }
 
   // Start of page render
   return (
+    <>
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        duration: 7000,
+        style: {
+          borderRadius: "12px",
+          padding: "12px 16px",
+          fontSize: "14px",
+        },
+      }}
+    />
     <div className="page">
       <header className="hero">
         <div>
@@ -415,7 +486,7 @@ async function handleSubmit(event) {
                 />
                 <button type="button" className="btn-secondary" onClick={handleAddressLookup} disabled={cooldowns.addressLookup > 0}>
                   {cooldowns.addressLookup > 0
-                    ? `Try again in ${cooldowns.addressLookup}s`
+                    ? `Try again in ${formatCooldown(cooldowns.addressLookup)}`
                     : "Find Address"}
                 </button>
 
@@ -445,7 +516,7 @@ async function handleSubmit(event) {
 
                 <button type="button" className="btn-secondary" onClick={handleCoordinateLookup} disabled={cooldowns.coordinateLookup > 0}>
                   {cooldowns.coordinateLookup > 0
-                    ? `Try again in ${cooldowns.coordinateLookup}s`
+                    ? `Try again in ${formatCooldown(cooldowns.coordinateLookup)}`
                     : "Find Address From Coordinates"}
                 </button>
 
@@ -471,7 +542,7 @@ async function handleSubmit(event) {
 
             <button className="button" type="submit" disabled={loading || cooldowns.environmentScan > 0}>
               {cooldowns.environmentScan > 0
-                ? `Try again in ${cooldowns.environmentScan}s`
+                ? `Try again in ${formatCooldown(cooldowns.environmentScan)}`
                 : loading
                 ? "Running Screen..."
                 : "Run Environmental Screen"}
@@ -501,13 +572,13 @@ async function handleSubmit(event) {
         </section>
 
         <section className="card">
-          <h2>Results</h2>
+          
 
-          {Object.values(error).some(Boolean) && (
+          {/* {Object.values(error).some(Boolean) && ( // Error above map display
             <div className="error">
               {error.general || error.addressLookup || error.coordinateLookup || error.environmentScan}
             </div>
-          )}
+          )} */}
 
           {loading && (
             <div className="loading-box">
@@ -662,5 +733,6 @@ async function handleSubmit(event) {
         </a>
       </footer>
     </div>
+    </>
   );
 }
