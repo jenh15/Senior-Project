@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-jobs = {}
 
 
 from dotenv import load_dotenv
@@ -21,7 +20,6 @@ load_dotenv()
 TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 
-jobs = {}
 
 app = FastAPI(
     title="Environmental Screening API",

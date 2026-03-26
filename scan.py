@@ -1,7 +1,8 @@
 import os
 import threading
+import time
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 from dotenv import load_dotenv
@@ -16,8 +17,9 @@ load_dotenv()
 router = APIRouter()
 
 TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+JOB_TTL_SECONDS = 360 # Time to live for jobs
 
-jobs: dict[str, dict] = {}
+jobs: dict[str, dict[str, Any]] = {}
 
 
 class ScanRequest(BaseModel):
@@ -25,6 +27,16 @@ class ScanRequest(BaseModel):
     lon: float = Field(..., ge=-180, le=180, description="Longitude")
     radius_miles: float = Field(..., ge=0, le=100, description="Scan radius in miles")
     captcha_token: str = Field(..., min_length=1, description="Cloudflare Turnstile token")
+
+def cleanup_old_jobs():
+    now = time.time()
+    expired = [
+        job_id for job_id, job in jobs.items()
+        if now - job.get("created_at", now) > JOB_TTL_SECONDS
+    ]
+    for job_id in expired:
+        jobs.pop(job_id, None)
+
 
 
 async def verify_turnstile(token: str, remote_ip: Optional[str] = None) -> bool:
@@ -59,6 +71,7 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
         jobs[job_id]["status"] = "running"
         jobs[job_id]["step"] = "Starting scan"
         jobs[job_id]["progress"] = 0
+        jobs[job_id]["started_at"] = time.time()
 
         
         result = GBIF.run_scan(
@@ -73,11 +86,13 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
         jobs[job_id]["progress"] = 100
         jobs[job_id]["result"] = result
         jobs[job_id]["error"] = None
+        jobs[job_id]["completed_at"] = time.time()
 
     except Exception as exc:
         jobs[job_id]["status"] = "error"
         jobs[job_id]["step"] = "Failed"
         jobs[job_id]["error"] = str(exc)
+        jobs[job_id]["completed_at"] = time.time()
 
 
 @router.post("/scan/start")
@@ -91,6 +106,7 @@ async def start_scan(request: Request, req: ScanRequest):
     if not is_human:
         raise HTTPException(status_code=400, detail="Human verification failed")
 
+    cleanup_old_jobs()
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "queued",
@@ -98,6 +114,10 @@ async def start_scan(request: Request, req: ScanRequest):
         "progress": 0,
         "result": None,
         "error": None,
+        "cached": False,
+        "created_at": time.time(),
+        "started_at": None,
+        "completed_at": None,
     }
 
     thread = threading.Thread(
