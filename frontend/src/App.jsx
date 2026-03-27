@@ -65,6 +65,9 @@ export default function App() {
   }, []);
 
 
+const pendingTokenResolveRef = useRef(null);
+const pendingTokenRejectRef = useRef(null);
+
   useEffect(() => {
     if (!window.turnstile || !turnstileRef.current || !TURNSTILE_SITE_KEY) return;
 
@@ -72,14 +75,30 @@ export default function App() {
 
     widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
       sitekey: TURNSTILE_SITE_KEY,
+      execution: "execute",
+      appearance: "interaction-only",
       callback: (token) => {
         setCaptchaToken(token);
+
+        if (pendingTokenResolveRef.current) {
+          pendingTokenResolveRef.current(token);
+          pendingTokenResolveRef.current = null;
+          pendingTokenRejectRef.current = null;
+        }
       },
       "expired-callback": () => {
         setCaptchaToken("");
       },
       "error-callback": () => {
         setCaptchaToken("");
+
+        if (pendingTokenRejectRef.current) {
+          pendingTokenRejectRef.current(
+            new Error("Turnstile Verification failed.")
+          );
+          pendingTokenRejectRef.current = null;
+          pendingTokenResolveRef.current = null;
+        }
       },
     });
     }, []);
@@ -115,7 +134,7 @@ function setGeneralError(message) {
 }
 
 function clearGeneralError() {
-  setErrors((prev) => ({
+  setError((prev) => ({
     ...prev,
     general: "",
   }));
@@ -147,6 +166,28 @@ const validateInputs = () => {
 
   return true;
 };
+
+async function getFreshTurnstileToken() {
+  console.log("Getting fresh Turnstile token...");
+  if (!window.turnstile || widgetIdRef.current === null) {
+    throw new Error("Verification widget is not ready yet.");
+  }
+
+  const existing = window.turnstile.getResponse(widgetIdRef.current);
+
+  if (existing) {
+    console.log("Using existing Turnstile token...");
+    return existing;
+  }
+
+  window.turnstile.reset(widgetIdRef.current);
+
+  return await new Promise((resolve, reject) => {
+    pendingTokenResolveRef.current = resolve;
+    pendingTokenRejectRef.current = reject;
+    window.turnstile.execute(widgetIdRef.current);
+  });
+}
 
 async function checkApiResponse(response, action) {
     if (response.ok) return response;
@@ -381,9 +422,13 @@ async function handleSubmit(event) {
         setLoading(false);
         return;
       }
-      if (!captchaToken) {
+      const token = await getFreshTurnstileToken();
+      console.log("Token obtained:", token ? "yes" : "no");
+
+      if (!token) {
         throw new Error("Please complete CAPTCHA");
       }
+      console.log("Starting scan start request");
       const startResponse = await fetch(`${backendUrl}/scan/start`, {
         method: "POST",
         headers: {
@@ -393,9 +438,10 @@ async function handleSubmit(event) {
           lat: Number(form.lat),
           lon: Number(form.lon),
           radius_miles: Number(form.radius_miles),
-          captcha_token: captchaToken
+          captcha_token: token
         })
       });
+      console.log("Scan start response status:", startResponse.status);
 
       await checkApiResponse(startResponse, "environmentScan");
 
@@ -538,8 +584,6 @@ async function handleSubmit(event) {
               />
             </label>
 
-            <div ref={turnstileRef} className="captcha-container"></div>
-
             <button className="button" type="submit" disabled={loading || cooldowns.environmentScan > 0}>
               {cooldowns.environmentScan > 0
                 ? `Try again in ${formatCooldown(cooldowns.environmentScan)}`
@@ -547,6 +591,8 @@ async function handleSubmit(event) {
                 ? "Running Screen..."
                 : "Run Environmental Screen"}
             </button>
+
+            <div ref={turnstileRef} className="captcha-container"></div>
 
             {/* {error.environmentScan && (
               <div className="error">
