@@ -224,9 +224,11 @@ function handleRateLimit(action, retryAfter = null) {
 
   setError((prev) => ({
     ...prev,
-    [action]: `${labels[action]} is rate limited. Try again in ${formatCooldown(seconds)}`,
+    [action]: `${labels[action]} is rate limited. 
+    Try again in ${formatCooldown(seconds)}`,
   }));
 
+  setHasScanned(false);
   // showToast("Rate limited. Try again later.", "error");
 }
 
@@ -416,7 +418,6 @@ async function handleSubmit(event) {
     setError({ general: "", addressLookup: "", coordinateLookup: "", environmentScan: "" });
     setData({ gbif_hits: [], species_context: [] });
     setLoading(true);
-    setHasScanned(true);
     setProgress(0);
     setStepText("Starting scan...");
 
@@ -438,6 +439,7 @@ async function handleSubmit(event) {
         throw new Error("Please complete CAPTCHA");
       }
       console.log("Starting scan start request");
+      setHasScanned(true);
       const startResponse = await fetch(`${backendUrl}/scan/start`, {
         method: "POST",
         headers: {
@@ -721,19 +723,31 @@ async function handleSubmit(event) {
               <div>
                 <h3>No endangered species detected!</h3>
                 <p>
-                  No Illinois endangered species were identified within the selected
-                  screening area based on the current GBIF query and filtering logic.
+                  No Illinois endangered species were identified, from 2025-2026, within the
+                  selected screening area based on the current GBIF query and filtering logic.
                 </p>
               </div>
             </div>
           )}
 
-          {!loading && data?.gbif_hits?.length > 0 && data && (
+          {!loading && data && hasScanned && (
             <>
               <div className="summary">
-                <div className="summary-box">
-                  <span className="summary-label">Flagged species</span>
+                <div className="summary-box warning">
+                  <span className="summary-label" color="yellow">Flagged species</span>
                   <span className="summary-value">{data.gbif_hits?.length ?? 0}</span>
+                </div>
+                <div className="summary-box">
+                  <span className="summary-label">Total Species Observed</span>
+                  <span className="summary-value">
+                    {data.found_species_count ?? 0}
+                  </span>
+                </div>
+                <div className="summary-box">
+                  <span className="summary-label">Radius</span>
+                  <span className="summary-value">
+                    {data.input?.radius_miles ?? 0} mi
+                  </span>
                 </div>
               </div>
 

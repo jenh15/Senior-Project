@@ -108,6 +108,7 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
             hits.append((name, count, taxon_key))
 
     hits.sort(key=lambda x: x[1], reverse=True)
+    found_species_count = len(hits)
     hits = hits[:MAX_SPECIES]
 
     print(MAX_SPECIES)
@@ -146,6 +147,7 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
 
     return {
         "input": gbif_result["input"],
+        "found_species_count": found_species_count, # total species count before truncation for AI
         "gbif_hits": [
             {
                 "scientific_name": nm,
