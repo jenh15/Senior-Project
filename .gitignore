@@ -1,11 +1,10 @@
 __pycache__
 *.vs
-*.vscode
 .env
 *.pyc
 node_modules
 dist
-.vscode/*
+.vscode/
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -14,6 +13,9 @@ dist
 *.njsproj
 *.sln
 *.sw?
+venv/
+.venv/
+env/
 
 
 # Logs
