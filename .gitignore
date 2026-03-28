@@ -31,3 +31,11 @@ node_modules
 dist
 dist-ssr
 *.local
+
+# Claude Code
+.claude/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
