@@ -1,26 +1,25 @@
-# GBIF.py
-
 import csv
 import math
+import pathlib
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Stop early if your key isn't set in environment through .env or cli
 from dotenv import load_dotenv
 load_dotenv()
 import os
-api_key = os.getenv("OPENAI_API_KEY")
-if "OPENAI_API_KEY" not in os.environ:
-    raise RuntimeError("OPENAI_API_KEY environment variable not set. Please rerun after setting your key.")
 
+if "OPENAI_API_KEY" not in os.environ:
+    raise RuntimeError("OPENAI_API_KEY environment variable not set.")
 
 GBIF_OCC_SEARCH = "https://api.gbif.org/v1/occurrence/search"
-MAX_SPECIES = int(os.getenv("MAX_SPECIES_FOR_AI", 1)) # Highest amount of species that can be sent to our openAI call
+MAX_SPECIES = int(os.getenv("MAX_SPECIES_FOR_AI", 1))
+
+DATA_DIR = pathlib.Path(__file__).parent / "data"
+
 
 def miles_to_km(mi: float) -> float:
     return mi * 1.609344
 
-# Bounding box over polygon for simplicity - Change to polygon later on for more specificity
+
 def get_bounding_box(lat: float, lon: float, radius_miles: float):
     radius_km = miles_to_km(radius_miles)
 
@@ -36,17 +35,13 @@ def get_bounding_box(lat: float, lon: float, radius_miles: float):
 
     return min_lat, max_lat, min_lon, max_lon
 
+
 def load_precomputed_taxon_keys(path: str) -> dict[str, int]:
     """
-    Reads IllinoisTaxonLookup.csv and returns:
-
-        {
-            "Myotis sodalis": 2435099,
-            "Pandion haliaetus": 2480506,
-            ...
-        }
+    Reads IllinoisTaxonLookup.csv and returns two dicts:
+        name_to_key: {"Myotis sodalis": 2435099, ...}
+        key_to_name: {2435099: "Myotis sodalis", ...}
     """
-
     name_to_key = {}
     key_to_name = {}
 
@@ -60,15 +55,17 @@ def load_precomputed_taxon_keys(path: str) -> dict[str, int]:
             if name and key:
                 try:
                     name_to_key[name] = int(key)
-                    key_to_name[int(key)] = name 
+                    key_to_name[int(key)] = name
                 except ValueError:
                     pass
 
     return name_to_key, key_to_name
 
-def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> list[tuple[int, int]]: # Do facet search to get ALL species keys in an area, then later cross section w/ precomputed list of IL endangered species keys
+
+def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> list[tuple[int, int]]:
+    """Facet search returning all (taxon_key, count) pairs in the bounding box."""
     min_lat, max_lat, min_lon, max_lon = get_bounding_box(lat, lon, radius_miles)
-    
+
     params = {
         "decimalLatitude": f"{min_lat},{max_lat}",
         "decimalLongitude": f"{min_lon},{max_lon}",
@@ -77,7 +74,7 @@ def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> 
         "facet": "speciesKey",
         "facetMincount": 1,
         "speciesKey.facetLimit": 1000,
-        "limit": 0
+        "limit": 0,
     }
 
     j = requests.get(GBIF_OCC_SEARCH, params=params, timeout=120).json()
@@ -86,12 +83,11 @@ def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> 
     return [(int(row["name"]), int(row["count"])) for row in counts if row.get("name")]
 
 
-
 def run_scan(lat, lon, radius_miles, progress_callback=None):
     if progress_callback:
         progress_callback("Loading Illinois taxon lookup", 10)
 
-    name_to_key, key_to_name = load_precomputed_taxon_keys("IllinoisTaxonLookup.csv")
+    name_to_key, key_to_name = load_precomputed_taxon_keys(str(DATA_DIR / "IllinoisTaxonLookup.csv"))
 
     if progress_callback:
         progress_callback("Querying GBIF species in area", 35)
@@ -111,7 +107,6 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
     found_species_count = len(hits)
     hits = hits[:MAX_SPECIES]
 
-    print(MAX_SPECIES)
     print("AI Context will be generated for the following species:")
     for name, count, key in hits:
         print(f" - {name} ({count} occurrences)")
@@ -127,19 +122,14 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
             "lon": lon,
             "radius_miles": radius_miles,
             "year_start": 2025,
-            "year_end": 2026
+            "year_end": 2026,
         },
         "hits": [
-            {
-                "scientific_name": nm,
-                "gbif_count": cnt,
-                "taxon_key": key
-            }
+            {"scientific_name": nm, "gbif_count": cnt, "taxon_key": key}
             for nm, cnt, key in hits
-        ]
+        ],
     }
 
-    #if hits is not None and len(hits) > 0:
     enriched = enrich_gbif_results_with_openai_batch(gbif_result)
 
     if progress_callback:
@@ -147,17 +137,14 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
 
     return {
         "input": gbif_result["input"],
-        "found_species_count": found_species_count, # total species count before truncation for AI
+        "found_species_count": found_species_count,
         "gbif_hits": [
-            {
-                "scientific_name": nm,
-                "gbif_count": cnt,
-                "taxon_key": key
-            }
+            {"scientific_name": nm, "gbif_count": cnt, "taxon_key": key}
             for nm, cnt, key in hits
         ],
-        "species_context": enriched["species_context"]
+        "species_context": enriched["species_context"],
     }
+
 
 def main():
     lat, lon = 38.617110, -90.207191
@@ -186,6 +173,7 @@ def main():
         print(item["scientific_name"])
         print(item["analysis"])
         print()
+
 
 if __name__ == "__main__":
     main()

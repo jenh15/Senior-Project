@@ -112,7 +112,7 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
 
 
 @router.post("/scan/start")
-@limiter.limit("5/hour")
+@limiter.limit("3/hour")
 async def start_scan(request: Request, req: ScanRequest):
     is_human = await verify_turnstile(
         req.captcha_token,

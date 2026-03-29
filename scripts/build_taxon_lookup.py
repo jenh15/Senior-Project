@@ -1,18 +1,22 @@
 # Precompute taxon key lookup for all species in IsEndangered.csv
 # to speed up our API response time (since taxon key lookup is a bottleneck)
-# One time script ** or run periodically if IsEndangered.csv is updated
-
-# Input : IsEndangered.csv (list of IL endangered species scientific names)
-# Output: IllinoisTaxonKeys.csv (mapping of scientific name → taxon key)
+# One-time script — re-run if data/IsEndangered.csv is updated.
+#
+# Usage (from project root):  python scripts/build_taxon_lookup.py
+#
+# Input : data/IsEndangered.csv
+# Output: data/IllinoisTaxonLookup.csv
 
 import csv
+import pathlib
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 GBIF_MATCH = "https://api.gbif.org/v1/species/match"
 
-INPUT_CSV = "IsEndangered.csv"
-OUTPUT_CSV = "IllinoisTaxonLookup.csv"
+DATA_DIR = pathlib.Path(__file__).parent.parent / "data"
+INPUT_CSV = str(DATA_DIR / "IsEndangered.csv")
+OUTPUT_CSV = str(DATA_DIR / "IllinoisTaxonLookup.csv")
 
 MAX_WORKERS = 20
 
@@ -73,7 +77,7 @@ def gbif_match_to_taxonkey(name: str) -> tuple[str, str]:
 
 
 def main():
-    print(f"Loading scientific names from {INPUT_CSV}...")
+    print(f"Loading scientific names from {DATA_DIR / 'IsEndangered.csv'}...")
     names = load_unique_scientific_names(INPUT_CSV)
     print(f"Loaded {len(names)} unique normalized scientific names")
 
@@ -96,7 +100,7 @@ def main():
     print(f"Matched {matched_count} names")
     print(f"Unmatched {unmatched_count} names")
 
-    print(f"Writing lookup CSV to {OUTPUT_CSV}...")
+    print(f"Writing lookup CSV to {DATA_DIR / 'IllinoisTaxonLookup.csv'}...")
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Scientific Name", "Taxon Key"])

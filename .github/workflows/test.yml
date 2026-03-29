@@ -34,6 +34,7 @@ jobs:
           TURNSTILE_SECRET_KEY: test-turnstile-key
           MAPTILER_API_KEY: test-maptiler-key
           FRONTEND_ORIGIN: http://localhost:5173
+          REDIS_URL: redis://localhost:6379
         run: pytest tests/ -m "not integration"
 
       - name: Upload coverage report (optional)
