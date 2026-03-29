@@ -9,9 +9,8 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-#from cachetools import TTLCache
 from limiter import limiter
-
+import redis_client
 import GBIF
 
 load_dotenv()
@@ -19,9 +18,8 @@ load_dotenv()
 router = APIRouter()
 
 TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
-JOB_TTL_SECONDS = 360 # Time to live for jobs
-#SCAN_CACHE_TTL_SECONDS = 1800 # cache completed scan results for 30 min
-#SCAN_CACHE_MAXSIZE = 500
+JOB_TTL_SECONDS = 3600           # Time-to-live for job records
+SCAN_CACHE_TTL_SECONDS = 86400   # Cache completed scan results for 1 hour
 
 jobs: dict[str, dict[str, Any]] = {}
 
@@ -32,6 +30,16 @@ class ScanRequest(BaseModel):
     radius_miles: float = Field(..., ge=0, le=100, description="Scan radius in miles")
     captcha_token: str = Field(..., min_length=1, description="Cloudflare Turnstile token")
 
+
+def scan_cache_key(lat: float, lon: float, radius_miles: float) -> str:
+    """
+    Build a Redis key for a scan result.  Coordinates are rounded to 3 decimal
+    places (~111 m precision) and radius to 1 decimal place so that requests
+    for nearly identical locations reuse the same cached result.
+    """
+    return f"scan:{round(lat, 3)}:{round(lon, 3)}:{round(radius_miles, 1)}"
+
+
 def cleanup_old_jobs():
     now = time.time()
     expired = [
@@ -40,7 +48,6 @@ def cleanup_old_jobs():
     ]
     for job_id in expired:
         jobs.pop(job_id, None)
-
 
 
 async def verify_turnstile(token: str, remote_ip: Optional[str] = None) -> bool:
@@ -77,7 +84,6 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
         jobs[job_id]["progress"] = 0
         jobs[job_id]["started_at"] = time.time()
 
-        
         result = GBIF.run_scan(
             lat=lat,
             lon=lon,
@@ -92,6 +98,12 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
         jobs[job_id]["error"] = None
         jobs[job_id]["completed_at"] = time.time()
 
+        key = scan_cache_key(lat, lon, radius_miles)
+        if redis_client.cache_set(key, result, SCAN_CACHE_TTL_SECONDS):
+            print(f"[SCAN CACHE SET] {key}")
+        else:
+            print(f"[SCAN CACHE SET FAILED] {key} — Redis unavailable or write error")
+
     except Exception as exc:
         jobs[job_id]["status"] = "error"
         jobs[job_id]["step"] = "Failed"
@@ -100,7 +112,7 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
 
 
 @router.post("/scan/start")
-@limiter.limit("1/hour")
+@limiter.limit("5/hour")
 async def start_scan(request: Request, req: ScanRequest):
     is_human = await verify_turnstile(
         req.captcha_token,
@@ -111,6 +123,28 @@ async def start_scan(request: Request, req: ScanRequest):
         raise HTTPException(status_code=400, detail="Human verification failed")
 
     cleanup_old_jobs()
+
+    cache_key = scan_cache_key(req.lat, req.lon, req.radius_miles)
+    cached_result = redis_client.cache_get(cache_key)
+
+    if cached_result is not None:
+        print(f"[SCAN CACHE HIT] {cache_key}")
+        job_id = str(uuid.uuid4())
+        now = time.time()
+        jobs[job_id] = {
+            "status": "complete",
+            "step": "Complete (cached)",
+            "progress": 100,
+            "result": cached_result,
+            "error": None,
+            "cached": True,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+        }
+        return {"job_id": job_id}
+
+    print(f"[SCAN CACHE MISS] {cache_key}")
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "queued",

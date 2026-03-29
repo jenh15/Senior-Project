@@ -23,13 +23,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+import redis_client
 import scan
 from scan import (
     JOB_TTL_SECONDS,
+    SCAN_CACHE_TTL_SECONDS,
     ScanRequest,
     cleanup_old_jobs,
     jobs,
     run_scan_job,
+    scan_cache_key,
 )
 
 
@@ -509,3 +512,107 @@ class TestScanStatusEndpoint:
         body = client.get(f"/scan/status/{jid}").json()
         assert body["progress"] == 60
         assert body["step"] == "Querying GBIF"
+
+
+# ---------------------------------------------------------------------------
+# 7. Redis scan caching
+# ---------------------------------------------------------------------------
+
+class TestScanCaching:
+
+    def test_cache_hit_skips_gbif(self, client, mocker, fake_redis):
+        """A cached scan result must not trigger a GBIF API call."""
+        key = scan_cache_key(41.8781, -87.6298, 5.0)
+        redis_client.cache_set(key, _FAKE_SCAN_RESULT, SCAN_CACHE_TTL_SECONDS)
+
+        mocker.patch("scan.verify_turnstile", new=AsyncMock(return_value=True))
+        mock_gbif = mocker.patch("GBIF.run_scan")
+
+        client.post("/scan/start", json=_VALID_SCAN_BODY)
+
+        mock_gbif.assert_not_called()
+
+    def test_cache_hit_job_is_immediately_complete(self, client, mocker, fake_redis):
+        """A cache hit must return a job that is already in the 'complete' state."""
+        key = scan_cache_key(41.8781, -87.6298, 5.0)
+        redis_client.cache_set(key, _FAKE_SCAN_RESULT, SCAN_CACHE_TTL_SECONDS)
+
+        mocker.patch("scan.verify_turnstile", new=AsyncMock(return_value=True))
+        resp = client.post("/scan/start", json=_VALID_SCAN_BODY)
+        job_id = resp.json()["job_id"]
+
+        body = client.get(f"/scan/status/{job_id}").json()
+        assert body["status"] == "complete"
+        assert body["progress"] == 100
+
+    def test_cache_hit_sets_cached_flag(self, client, mocker, fake_redis):
+        """Jobs served from the cache must have cached=True."""
+        key = scan_cache_key(41.8781, -87.6298, 5.0)
+        redis_client.cache_set(key, _FAKE_SCAN_RESULT, SCAN_CACHE_TTL_SECONDS)
+
+        mocker.patch("scan.verify_turnstile", new=AsyncMock(return_value=True))
+        resp = client.post("/scan/start", json=_VALID_SCAN_BODY)
+        job_id = resp.json()["job_id"]
+
+        assert client.get(f"/scan/status/{job_id}").json()["cached"] is True
+
+    def test_cache_hit_result_matches_cached_data(self, client, mocker, fake_redis):
+        """The job result must equal the value that was stored in Redis."""
+        key = scan_cache_key(41.8781, -87.6298, 5.0)
+        redis_client.cache_set(key, _FAKE_SCAN_RESULT, SCAN_CACHE_TTL_SECONDS)
+
+        mocker.patch("scan.verify_turnstile", new=AsyncMock(return_value=True))
+        resp = client.post("/scan/start", json=_VALID_SCAN_BODY)
+        job_id = resp.json()["job_id"]
+
+        body = client.get(f"/scan/status/{job_id}").json()
+        assert body["result"] == _FAKE_SCAN_RESULT
+
+    def test_cache_miss_calls_gbif(self, client, mocker, fake_redis):
+        """An empty cache must result in a real GBIF scan being started."""
+        mocker.patch("scan.verify_turnstile", new=AsyncMock(return_value=True))
+        mock_gbif = mocker.patch("GBIF.run_scan", return_value=_FAKE_SCAN_RESULT)
+
+        client.post("/scan/start", json=_VALID_SCAN_BODY)
+
+        mock_gbif.assert_called_once()
+
+    def test_run_scan_job_stores_result_in_redis(self, mocker, fake_redis):
+        """After a successful scan, the result must be persisted in Redis."""
+        jid = str(uuid.uuid4())
+        jobs[jid] = {
+            "status": "queued", "step": "Queued", "progress": 0,
+            "result": None, "error": None, "cached": False,
+            "created_at": time.time(), "started_at": None, "completed_at": None,
+        }
+        mocker.patch("GBIF.run_scan", return_value=_FAKE_SCAN_RESULT)
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        key = scan_cache_key(41.8781, -87.6298, 5.0)
+        assert redis_client.cache_get(key) == _FAKE_SCAN_RESULT
+
+    def test_run_scan_job_error_does_not_cache(self, mocker, fake_redis):
+        """A failed scan must not write anything to Redis."""
+        jid = str(uuid.uuid4())
+        jobs[jid] = {
+            "status": "queued", "step": "Queued", "progress": 0,
+            "result": None, "error": None, "cached": False,
+            "created_at": time.time(), "started_at": None, "completed_at": None,
+        }
+        mocker.patch("GBIF.run_scan", side_effect=RuntimeError("API down"))
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        key = scan_cache_key(41.8781, -87.6298, 5.0)
+        assert redis_client.cache_get(key) is None
+
+    def test_scan_cache_key_normalizes_nearby_coords(self):
+        """Coordinates within 3 decimal place rounding must produce the same key."""
+        assert scan_cache_key(41.87800, -87.62800, 5.0) == scan_cache_key(41.87801, -87.62801, 5.0)
+
+    def test_scan_cache_key_distinguishes_different_coords(self):
+        assert scan_cache_key(41.878, -87.629, 5.0) != scan_cache_key(42.000, -88.000, 5.0)
+
+    def test_scan_cache_key_distinguishes_different_radii(self):
+        assert scan_cache_key(41.878, -87.629, 5.0) != scan_cache_key(41.878, -87.629, 10.0)

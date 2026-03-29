@@ -44,13 +44,11 @@ def client():
 
 
 @pytest.fixture(autouse=True)
-def clear_caches():
-    """Wipe both TTL caches before and after every test."""
-    geocode.geocode_cache.clear()
-    geocode.reverse_cache.clear()
+def clear_caches(fake_redis):
+    """Flush Redis before and after every test to guarantee a clean cache."""
+    fake_redis.flushall()
     yield
-    geocode.geocode_cache.clear()
-    geocode.reverse_cache.clear()
+    fake_redis.flushall()
 
 
 @pytest.fixture(autouse=True)
@@ -169,14 +167,13 @@ class TestCacheKeyFunctions:
         assert geocode_cache_key("Chicago IL") == geocode_cache_key("chicago il")
 
     # reverse_cache_key
-    def test_reverse_key_is_a_tuple(self):
+    def test_reverse_key_is_a_string(self):
         key = reverse_cache_key(41.8781, -87.6298)
-        assert isinstance(key, tuple)
-        assert len(key) == 2
+        assert isinstance(key, str)
 
     def test_reverse_key_rounds_to_three_decimals(self):
         key = reverse_cache_key(41.87812345, -87.62981234)
-        assert key == (41.878, -87.630)
+        assert key == "41.878:-87.63"
 
     def test_reverse_key_same_for_nearby_coords(self):
         """Tiny float differences within rounding tolerance must share a cache key."""

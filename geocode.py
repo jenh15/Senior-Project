@@ -1,12 +1,11 @@
 import os
-import threading
 from urllib.parse import quote
 
 import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query, Request
 from limiter import limiter
-from cachetools import TTLCache
+import redis_client
 
 load_dotenv()
 
@@ -16,20 +15,8 @@ GEOCODER_PROVIDER = os.getenv("GEOCODER_PROVIDER", "maptiler").lower()
 MAPTILER_API_KEY = os.getenv("MAPTILER_API_KEY", "")
 APP_USER_AGENT = os.getenv("APP_USER_AGENT", "EnvScreeningApp")
 
-
-# Cache settings
 GEOCODE_CACHE_TTL_SECONDS = 86400   # 24 hours
 REVERSE_CACHE_TTL_SECONDS = 86400
-GEOCODE_CACHE_MAXSIZE = 1000
-REVERSE_CACHE_MAXSIZE = 1000
-
-# In memory TTL caches
-geocode_cache = TTLCache(maxsize=GEOCODE_CACHE_MAXSIZE, ttl=GEOCODE_CACHE_TTL_SECONDS)
-reverse_cache = TTLCache(maxsize=REVERSE_CACHE_MAXSIZE, ttl=REVERSE_CACHE_TTL_SECONDS)
-
-# cachetools caches are not thread safe by default, so guard access
-geocode_cache_lock = threading.Lock()
-reverse_cache_lock = threading.Lock()
 
 
 def normalize_result(label: str, lat: float, lon: float, bbox=None, raw=None):
@@ -44,9 +31,9 @@ def normalize_result(label: str, lat: float, lon: float, bbox=None, raw=None):
 def geocode_cache_key(query: str) -> str:
     return query.strip().lower()
 
-def reverse_cache_key(lat: float, lon: float) -> tuple[float, float]:
-    # round a bit so tiny float differences don't miss cache
-    return (round(lat, 3), round(lon, 3))
+def reverse_cache_key(lat: float, lon: float) -> str:
+    # Round to 3 decimal places so tiny float differences share the same entry
+    return f"{round(lat, 3)}:{round(lon, 3)}"
 
 async def geocode_with_maptiler(query: str) -> dict:
     if not MAPTILER_API_KEY:
@@ -225,33 +212,27 @@ async def geocode_search(
     request: Request,
     q: str = Query(..., min_length=3, description="Address or place query"),
 ):
-    
     key = geocode_cache_key(q)
+    redis_key = f"geocode:{key}"
 
-    with geocode_cache_lock:
-        cached = geocode_cache.get(key)
-
+    cached = redis_client.cache_get(redis_key)
     if cached is not None:
-        print(f"[CACHE HIT] geocode search: {q}") # DEBUG
-        return {
-            **cached,
-            "cached": True,
-        }
-    print(f"[CACHE MISS] geocode search: {q}") #DEBUG
+        print(f"[CACHE HIT] geocode search: {q}")
+        return {**cached, "cached": True}
+    print(f"[CACHE MISS] geocode search: {q}")
 
     try:
         if GEOCODER_PROVIDER == "maptiler":
             result = await geocode_with_maptiler(q)
         elif GEOCODER_PROVIDER == "nominatim":
             result = await geocode_with_nominatim(q)
-        else :
+        else:
             raise HTTPException(
                 status_code=500,
                 detail=f"Unsupported geocoder provider: {GEOCODER_PROVIDER}",
             )
-        with geocode_cache_lock:
-            geocode_cache[key] = result
 
+        redis_client.cache_set(redis_key, result, GEOCODE_CACHE_TTL_SECONDS)
         return result
 
     except httpx.HTTPStatusError as exc:
@@ -273,35 +254,28 @@ async def reverse_geocode(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
 ):
-    key = reverse_cache_key(lat, lon)
+    redis_key = f"reverse:{reverse_cache_key(lat, lon)}"
 
-    with reverse_cache_lock:
-        cached = reverse_cache.get(key)
-
+    cached = redis_client.cache_get(redis_key)
     if cached is not None:
-        print(f"[CACHE HIT] reverse: {lat}, {lon}") # DEBUG
-        return {
-            **cached,
-            "cached": True,
-        }
-    print(f"[CACHE MISS] reverse: {lat}, {lon}") # DEBUG
+        print(f"[CACHE HIT] reverse: {lat}, {lon}")
+        return {**cached, "cached": True}
+    print(f"[CACHE MISS] reverse: {lat}, {lon}")
 
     try:
         if GEOCODER_PROVIDER == "maptiler":
             result = await reverse_with_maptiler(lat, lon)
         elif GEOCODER_PROVIDER == "nominatim":
             result = await reverse_with_nominatim(lat, lon)
-
         else:
             raise HTTPException(
-            status_code=500,
-            detail=f"Unsupported geocoder provider: {GEOCODER_PROVIDER}",
-        )
-    
-        with reverse_cache_lock:
-            reverse_cache[key] = result
+                status_code=500,
+                detail=f"Unsupported geocoder provider: {GEOCODER_PROVIDER}",
+            )
 
+        redis_client.cache_set(redis_key, result, REVERSE_CACHE_TTL_SECONDS)
         return result
+
     except httpx.HTTPStatusError as exc:
         raise HTTPException(
             status_code=502,
