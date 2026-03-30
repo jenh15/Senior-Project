@@ -757,7 +757,7 @@ async function handleSubmit(event) {
               <div>
                 <h3>No endangered species detected!</h3>
                 <p>
-                  No Illinois endangered species were identified, from 2025-2026, within the
+                  No Illinois endangered species were identified, from 2015-2026, within the
                   selected screening area based on the current GBIF query and filtering logic.
                 </p>
               </div>

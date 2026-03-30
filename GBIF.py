@@ -70,7 +70,7 @@ def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> 
         "decimalLatitude": f"{min_lat},{max_lat}",
         "decimalLongitude": f"{min_lon},{max_lon}",
         "hasCoordinate": "true",
-        "year": "2025,2026",
+        "year": "2015,2026",
         "facet": "speciesKey",
         "facetMincount": 1,
         "speciesKey.facetLimit": 1000,
@@ -121,7 +121,7 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
             "lat": lat,
             "lon": lon,
             "radius_miles": radius_miles,
-            "year_start": 2025,
+            "year_start": 2015,
             "year_end": 2026,
         },
         "hits": [
