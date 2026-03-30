@@ -4,6 +4,8 @@ import time
 import uuid
 from typing import Any, Optional
 
+import logging
+
 import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Request
@@ -14,6 +16,8 @@ import redis_client
 import GBIF
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -28,7 +32,7 @@ class ScanRequest(BaseModel):
     lat: float = Field(..., ge=-90, le=90, description="Latitude")
     lon: float = Field(..., ge=-180, le=180, description="Longitude")
     radius_miles: float = Field(..., ge=0, le=100, description="Scan radius in miles")
-    captcha_token: str = Field(..., min_length=1, description="Cloudflare Turnstile token")
+    captcha_token: str = Field(..., min_length=1, max_length=2048, description="Cloudflare Turnstile token")
 
 
 def scan_cache_key(lat: float, lon: float, radius_miles: float) -> str:
@@ -102,9 +106,9 @@ def run_scan_job(job_id: str, lat: float, lon: float, radius_miles: float):
 
         key = scan_cache_key(lat, lon, radius_miles)
         if redis_client.cache_set(key, result, SCAN_CACHE_TTL_SECONDS):
-            print(f"[SCAN CACHE SET] {key}")
+            logger.info("SCAN CACHE SET %s", key)
         else:
-            print(f"[SCAN CACHE SET FAILED] {key} — Redis unavailable or write error")
+            logger.warning("SCAN CACHE SET FAILED %s — Redis unavailable or write error", key)
 
     except Exception as exc:
         jobs[job_id]["status"] = "error"
@@ -130,7 +134,7 @@ async def start_scan(request: Request, req: ScanRequest):
     cached_result = redis_client.cache_get(cache_key)
 
     if cached_result is not None:
-        print(f"[SCAN CACHE HIT] {cache_key}")
+        logger.info("SCAN CACHE HIT %s", cache_key)
         job_id = str(uuid.uuid4())
         now = time.time()
         jobs[job_id] = {
@@ -146,7 +150,7 @@ async def start_scan(request: Request, req: ScanRequest):
         }
         return {"job_id": job_id}
 
-    print(f"[SCAN CACHE MISS] {cache_key}")
+    logger.info("SCAN CACHE MISS %s", cache_key)
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "queued",

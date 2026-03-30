@@ -1,4 +1,5 @@
 import csv
+import logging
 import math
 import pathlib
 import requests
@@ -6,6 +7,8 @@ import requests
 from dotenv import load_dotenv
 load_dotenv()
 import os
+
+logger = logging.getLogger(__name__)
 
 if "OPENAI_API_KEY" not in os.environ:
     raise RuntimeError("OPENAI_API_KEY environment variable not set.")
@@ -31,7 +34,7 @@ def get_bounding_box(lat: float, lon: float, radius_miles: float):
     min_lon = lon - lon_delta
     max_lon = lon + lon_delta
 
-    print(f"Bounding box = [min_lat: {min_lat}, max_lat: {max_lat}, min_lon: {min_lon}, max_lon: {max_lon}]")
+    logger.debug("Bounding box = [min_lat: %s, max_lat: %s, min_lon: %s, max_lon: %s]", min_lat, max_lat, min_lon, max_lon)
 
     return min_lat, max_lat, min_lon, max_lon
 
@@ -107,9 +110,9 @@ def run_scan(lat, lon, radius_miles, progress_callback=None):
     found_species_count = len(hits)
     hits = hits[:MAX_SPECIES]
 
-    print("AI Context will be generated for the following species:")
+    logger.info("AI context will be generated for %d species", len(hits))
     for name, count, key in hits:
-        print(f" - {name} ({count} occurrences)")
+        logger.info("  - %s (%d occurrences)", name, count)
 
     if progress_callback:
         progress_callback("Generating AI ecological context", 85)

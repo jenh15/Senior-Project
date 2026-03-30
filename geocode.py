@@ -1,3 +1,4 @@
+import logging
 import os
 from urllib.parse import quote
 
@@ -8,6 +9,8 @@ from limiter import limiter
 import redis_client
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -46,7 +49,7 @@ async def geocode_with_maptiler(query: str) -> dict:
         "limit": 5,
         "country": "us",
     }
-    print("[MAPTILER CALL]")
+    logger.info("MAPTILER geocode call: %s", query)
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url, params=params)
         resp.raise_for_status()
@@ -89,7 +92,7 @@ async def reverse_with_maptiler(lat: float, lon: float) -> dict:
         "key": MAPTILER_API_KEY,
         "limit": 1,
     }
-    print("[MAPTILER CALL]")
+    logger.info("MAPTILER reverse call: %.3f, %.3f", lat, lon)
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url, params=params)
         resp.raise_for_status()
@@ -136,7 +139,7 @@ async def geocode_with_nominatim(query: str) -> dict:
     headers = {
         "User-Agent": APP_USER_AGENT,
     }
-    print("[NOMINATIM CALL]")
+    logger.info("NOMINATIM geocode call: %s", query)
     async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
         resp = await client.get(url, params=params)
         resp.raise_for_status()
@@ -174,7 +177,7 @@ async def reverse_with_nominatim(lat: float, lon: float) -> dict:
     headers = {
         "User-Agent": APP_USER_AGENT,
     }
-    print("[NOMINATIM CALL]")
+    logger.info("NOMINATIM reverse call: %.3f, %.3f", lat, lon)
     async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
         resp = await client.get(url, params=params)
         resp.raise_for_status()
@@ -217,9 +220,9 @@ async def geocode_search(
 
     cached = redis_client.cache_get(redis_key)
     if cached is not None:
-        print(f"[CACHE HIT] geocode search: {q}")
+        logger.info("GEOCODE CACHE HIT: %s", q)
         return {**cached, "cached": True}
-    print(f"[CACHE MISS] geocode search: {q}")
+    logger.info("GEOCODE CACHE MISS: %s", q)
 
     try:
         if GEOCODER_PROVIDER == "maptiler":
@@ -258,9 +261,9 @@ async def reverse_geocode(
 
     cached = redis_client.cache_get(redis_key)
     if cached is not None:
-        print(f"[CACHE HIT] reverse: {lat}, {lon}")
+        logger.info("REVERSE CACHE HIT: %.3f, %.3f", lat, lon)
         return {**cached, "cached": True}
-    print(f"[CACHE MISS] reverse: {lat}, {lon}")
+    logger.info("REVERSE CACHE MISS: %.3f, %.3f", lat, lon)
 
     try:
         if GEOCODER_PROVIDER == "maptiler":

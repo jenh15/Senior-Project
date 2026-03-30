@@ -728,6 +728,20 @@ async function handleSubmit(event) {
           
           )}
 
+          {!hasScanned && !loading && (
+            <div className="skeleton-placeholder">
+              <div className="skeleton-summary-row">
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+              </div>
+              <div className="skeleton-stack">
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-card"></div>
+              </div>
+            </div>
+          )}
+
           {loading && (() => {
             const SCAN_STEPS = [
               { label: "Loading taxon lookup", threshold: 10 },

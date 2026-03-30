@@ -592,3 +592,44 @@ main {
   overflow: hidden;
   border: 1px solid #d9e3dc;
 }
+
+/* Skeleton loaders */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e4ede6 25%, #f0f7f1 50%, #e4ede6 75%);
+  background-size: 600px 100%;
+  animation: shimmer 1.6s ease infinite;
+  border-radius: 12px;
+}
+
+.skeleton-placeholder {
+  margin-top: 16px;
+}
+
+.skeleton-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.skeleton-summary-row .skeleton {
+  flex: 1;
+  min-width: 120px;
+  height: 76px;
+  border-radius: 16px;
+}
+
+.skeleton-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.skeleton-card {
+  height: 110px;
+  border-radius: 18px;
+}
