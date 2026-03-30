@@ -51,7 +51,6 @@ export default function App() {
   });
   const [jobId, setJobId] = useState(null);
   const [progress, setProgress] = useState(0);
-  const [stepText, setStepText] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
   const [lookingUpAddress, setLookingUpAddress] = useState(false);
   const [lookingUpCoords, setLookingUpCoords] = useState(false);
@@ -263,11 +262,10 @@ function pollScanStatus(scanJobId) {
       const statusJson = await statusResponse.json();
 
       setProgress(statusJson.progress || 0);
-      setStepText(statusJson.step || "Processing...");
+
 
       if (statusJson.status === "complete") {
         setProgress(100);
-        setStepText("Finalizing results...");
         clearInterval(interval);
 
         setTimeout(() => {
@@ -405,8 +403,7 @@ function resetResults() {
   });
   setJobId(null);
   setProgress(0);
-  setStepText("");
-  setScanMeta({ cached: false, scannedAt: null });
+  setScanMeta(null);
 }
 
 function timeAgo(unixTimestamp) {
@@ -449,7 +446,6 @@ async function handleSubmit(event) {
     setData({ gbif_hits: [], species_context: [] });
     setLoading(true);
     setProgress(0);
-    setStepText("Starting scan...");
 
     try {
       if (!backendUrl) {
@@ -642,12 +638,6 @@ async function handleSubmit(event) {
             </button>
 
             <div ref={turnstileRef} className="captcha-container"></div>
-            {loading && (
-            <div className="loading-box">
-              <div className="spinner"></div>
-              <p>Loading...</p>
-            </div>
-          )}
 
             {/* {error.environmentScan && (
               <div className="error">
@@ -738,18 +728,45 @@ async function handleSubmit(event) {
           
           )}
 
-          {loading && (
-            <div className="progress-box">
-              <h3>Processing scan...</h3>
-              <div className="progress-bar">
-                <div
-                  className="progress-bar-fill"
-                  style={{ width: `${progress}%` }}
-                ></div>
+          {loading && (() => {
+            const SCAN_STEPS = [
+              { label: "Loading taxon lookup", threshold: 10 },
+              { label: "Querying GBIF species", threshold: 35 },
+              { label: "Cross-referencing endangered species", threshold: 60 },
+              { label: "Generating AI ecological context", threshold: 85 },
+              { label: "Finalizing results", threshold: 100 },
+            ];
+            return (
+              <div className="progress-box">
+                <h3>Processing scan...</h3>
+                <div className="progress-bar">
+                  <div
+                    className="progress-bar-fill"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+                <ol className="scan-steps">
+                  {SCAN_STEPS.map((step) => {
+                    const done = progress >= step.threshold;
+                    const active = !done && SCAN_STEPS.find(
+                      (s) => progress < s.threshold
+                    ) === step;
+                    return (
+                      <li
+                        key={step.label}
+                        className={`scan-step ${done ? "scan-step-done" : active ? "scan-step-active" : "scan-step-pending"}`}
+                      >
+                        <span className="scan-step-circle">
+                          {done ? "✓" : active ? <span className="scan-step-spinner" /> : ""}
+                        </span>
+                        <span className="scan-step-label">{step.label}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
               </div>
-              <p className="progress-step-text">{stepText}</p>
-            </div>
-          )}
+            );
+          })()}
 
           {!Object.values(error).some(Boolean) && !loading && hasScanned && data?.gbif_hits?.length === 0 && (
             <div className="success-box">
