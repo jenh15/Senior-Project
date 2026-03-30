@@ -10,9 +10,12 @@ taking down the application.
 """
 
 import json
+import logging
 import os
 
 import redis
+
+logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
@@ -36,7 +39,7 @@ def cache_get(key: str):
         raw = get_client().get(key)
         return json.loads(raw) if raw is not None else None
     except Exception as exc:
-        print(f"[REDIS ERROR] cache_get({key!r}) failed: {exc}")
+        logger.error("cache_get(%r) failed: %s", key, exc)
         return None
 
 
@@ -49,7 +52,7 @@ def cache_set(key: str, value, ttl: int) -> bool:
         get_client().setex(key, ttl, json.dumps(value))
         return True
     except Exception as exc:
-        print(f"[REDIS ERROR] cache_set({key!r}) failed: {exc}")
+        logger.error("cache_set(%r) failed: %s", key, exc)
         return False
 
 
@@ -59,5 +62,5 @@ def cache_delete(key: str) -> bool:
         get_client().delete(key)
         return True
     except Exception as exc:
-        print(f"[REDIS ERROR] cache_delete({key!r}) failed: {exc}")
+        logger.error("cache_delete(%r) failed: %s", key, exc)
         return False

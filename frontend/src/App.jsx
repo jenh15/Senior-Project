@@ -3,8 +3,10 @@ import { Toaster, toast } from "react-hot-toast";
 import "leaflet/dist/leaflet.css";
 import ScreeningMap from "./ScreeningMap";
 import gbifLogo from "./assets/gbif-dot-org-green-logo.svg";
-import inhsLogo from "./assets/dnr-nav-logo.jpeg";
+import inhsLogo from "./assets/dnr-nav-logo.png";
 import ourLogo from "./assets/environment_screening_logo.png";
+import openAILogo from "./assets/openailogo.png";
+import mapTilerLogo from "./assets/mapTilerLogo.svg";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
@@ -531,13 +533,15 @@ async function handleSubmit(event) {
     />
     <div className="page">
       <header className="hero">
-        <div>
-          <p className="eyebrow">Environmental Screening Prototype</p>
-          <h1>Environmental Screening for Construction Planning</h1>
-          
-          <p className="subtext">
-            Submit project coordinates to screen for nearby Illinois endangered species and generate AI-assisted ecological planning context for highest occuring species.
-          </p>
+        <div className="hero-inner">
+          <div className="hero-text">
+            <p className="eyebrow">Illinois Endangered Species · Construction Planning</p>
+            <h1>Environmental Screening</h1>
+            <p className="subtext">
+              Screen a proposed construction site for nearby Illinois endangered species using GBIF occurrence data and AI-assisted ecological planning context.
+            </p>
+          </div>
+          {/* <img src={ourLogo} alt="EnvironScreen" className="hero-logo" /> */}
         </div>
       </header>
 
@@ -728,6 +732,20 @@ async function handleSubmit(event) {
           
           )}
 
+          {!hasScanned && !loading && (
+            <div className="skeleton-placeholder">
+              <div className="skeleton-summary-row">
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+              </div>
+              <div className="skeleton-stack">
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-card"></div>
+              </div>
+            </div>
+          )}
+
           {loading && (() => {
             const SCAN_STEPS = [
               { label: "Loading taxon lookup", threshold: 10 },
@@ -835,40 +853,32 @@ async function handleSubmit(event) {
         </section>
       </main>
       <footer className="site-footer">
-        <p>
-          Data sources:{" "}
-          <a href="https://www.gbif.org" target="_blank" rel="noreferrer">
-            <img src={gbifLogo} alt="GBIF Logo" className="footer-logo" />
-          </a>{"  "}
-          {" "}
-          <a
-            href="https://naturalheritage.illinois.gov/dataresearch/access-our-data.html"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <img src={inhsLogo} alt="Illinois Natural Heritage Logo" className="footer-logo" />
-          </a>
-          
-        </p>
-
-        <p>
-          Map data ©{" "}
-          <a
-            href="https://www.openstreetmap.org/copyright"
-            target="_blank"
-            rel="noreferrer"
-          >
-            OpenStreetMap contributors
-          </a>
-          .
-        </p>
-        <p className="footer-note">
-          This is a preliminary screening tool and does not replace official agency review,
-          permitting, or provide environmental approval.
-        </p>
-        <a href="https://environmentscreen.onrender.com" target="_blank" rel="noreferrer">
-          <img src={ourLogo} alt="Logo" width={128} height={128} className="our-logo"/>
-        </a>
+        <div className="footer-inner">
+          <div className="footer-sources">
+            <span className="footer-sources-label">Powered by</span>
+            <a href="https://www.gbif.org" target="_blank" rel="noreferrer" className="footer-source-link">
+              <img src={gbifLogo} alt="GBIF" className="footer-logo" />
+            </a>
+            <a href="https://naturalheritage.illinois.gov/dataresearch/access-our-data.html" target="_blank" rel="noreferrer" className="footer-source-link">
+              <img src={inhsLogo} alt="Illinois Natural Heritage Survey" className="footer-logo footer-logo-inhs" />
+            </a>
+            <a href="https://www.maptiler.com" target="_blank" rel="noreferrer" className="footer-source-link footer-text-source">
+              <img src={mapTilerLogo} alt="MapTiler" className="footer-logo footer-logo-maptiler" />
+            </a>
+            <a href="https://openai.com" target="_blank" rel="noreferrer" className="footer-source-link footer-text-source">
+              <img src={openAILogo} alt="OpenAI" className="footer-logo footer-logo-openai" />
+            </a>
+          </div>
+          <p className="footer-map-credit">
+            Map tiles ©{" "}
+            <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noreferrer">MapTiler</a>
+            {" · "}Data ©{" "}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>
+          </p>
+          <p className="footer-note">
+            Preliminary screening only — does not replace official agency review, permitting, or regulatory approval.
+          </p>
+        </div>
       </footer>
     </div>
     </>
