@@ -14,6 +14,7 @@ The test client uses a minimal app without SlowAPI middleware so endpoints
 can be exercised freely without hitting rate limits.
 """
 
+import threading
 import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -181,6 +182,13 @@ class TestScanRequestValidation:
     def test_empty_captcha_token_rejected(self):
         with pytest.raises(ValidationError):
             ScanRequest(lat=0.0, lon=0.0, radius_miles=5.0, captcha_token="")
+
+    def test_captcha_token_at_max_length_accepted(self):
+        ScanRequest(lat=0.0, lon=0.0, radius_miles=5.0, captcha_token="t" * 2048)
+
+    def test_captcha_token_exceeding_max_length_rejected(self):
+        with pytest.raises(ValidationError):
+            ScanRequest(lat=0.0, lon=0.0, radius_miles=5.0, captcha_token="t" * 2049)
 
 
 # ---------------------------------------------------------------------------
@@ -616,3 +624,165 @@ class TestScanCaching:
 
     def test_scan_cache_key_distinguishes_different_radii(self):
         assert scan_cache_key(41.878, -87.629, 5.0) != scan_cache_key(41.878, -87.629, 10.0)
+
+    def test_scan_cache_key_has_scan_prefix(self):
+        assert scan_cache_key(41.878, -87.629, 5.0).startswith("scan:")
+
+    def test_scan_cache_key_rounds_radius_to_one_decimal(self):
+        """Radii that differ only beyond 1 decimal place must share a cache key."""
+        assert scan_cache_key(41.878, -87.629, 5.01) == scan_cache_key(41.878, -87.629, 5.04)
+
+    def test_scan_cache_key_different_one_decimal_radii_differ(self):
+        assert scan_cache_key(41.878, -87.629, 5.0) != scan_cache_key(41.878, -87.629, 5.1)
+
+
+# ---------------------------------------------------------------------------
+# 8. run_scan_job() — scanned_at timestamp
+# ---------------------------------------------------------------------------
+
+class TestRunScanJobTimestamp:
+
+    def _seed_job(self, job_id):
+        jobs[job_id] = {
+            "status": "queued", "step": "Queued", "progress": 0,
+            "result": None, "error": None, "cached": False,
+            "created_at": time.time(), "started_at": None, "completed_at": None,
+        }
+
+    def test_success_embeds_scanned_at_in_result(self, mocker):
+        """run_scan_job must inject scanned_at into the result before storing it."""
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        assert "scanned_at" in jobs[jid]["result"]
+
+    def test_scanned_at_is_a_float(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        assert isinstance(jobs[jid]["result"]["scanned_at"], float)
+
+    def test_scanned_at_is_recent(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        before = time.time()
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        assert jobs[jid]["result"]["scanned_at"] >= before
+
+
+# ---------------------------------------------------------------------------
+# 9. run_scan_job() — watchdog timer
+# ---------------------------------------------------------------------------
+
+class TestRunScanJobWatchdog:
+
+    def _seed_job(self, job_id):
+        jobs[job_id] = {
+            "status": "queued", "step": "Queued", "progress": 0,
+            "result": None, "error": None, "cached": False,
+            "created_at": time.time(), "started_at": None, "completed_at": None,
+        }
+
+    def test_watchdog_timer_is_started(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mock_timer = MagicMock()
+        mocker.patch("scan.threading.Timer", return_value=mock_timer)
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        mock_timer.start.assert_called_once()
+
+    def test_watchdog_cancelled_after_success(self, mocker):
+        """Timer must always be cancelled when the scan completes normally."""
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mock_timer = MagicMock()
+        mocker.patch("scan.threading.Timer", return_value=mock_timer)
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        mock_timer.cancel.assert_called_once()
+
+    def test_watchdog_cancelled_after_error(self, mocker):
+        """Timer must be cancelled even if GBIF raises an exception."""
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mock_timer = MagicMock()
+        mocker.patch("scan.threading.Timer", return_value=mock_timer)
+        mocker.patch("GBIF.run_scan", side_effect=RuntimeError("GBIF down"))
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        mock_timer.cancel.assert_called_once()
+
+    def test_watchdog_callback_marks_running_job_as_error(self, mocker):
+        """If the watchdog fires while the job is still running, it must set status='error'."""
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        captured = {}
+
+        def capture_timer(delay, fn):
+            captured["fn"] = fn
+            return MagicMock()
+
+        mocker.patch("scan.threading.Timer", side_effect=capture_timer)
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        # Simulate the timer firing against a mid-scan "running" job
+        jobs[jid]["status"] = "running"
+        captured["fn"]()
+
+        assert jobs[jid]["status"] == "error"
+        assert "time limit" in jobs[jid]["error"]
+
+    def test_watchdog_callback_is_noop_when_job_already_complete(self, mocker):
+        """If the scan finishes before the timer fires, the callback must not overwrite status."""
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        captured = {}
+
+        def capture_timer(delay, fn):
+            captured["fn"] = fn
+            return MagicMock()
+
+        mocker.patch("scan.threading.Timer", side_effect=capture_timer)
+        mocker.patch("GBIF.run_scan", return_value={**_FAKE_SCAN_RESULT})
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        assert jobs[jid]["status"] == "complete"
+        captured["fn"]()  # fire the timer callback late
+        assert jobs[jid]["status"] == "complete"
+
+    def test_watchdog_callback_is_noop_when_job_errored(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        captured = {}
+
+        def capture_timer(delay, fn):
+            captured["fn"] = fn
+            return MagicMock()
+
+        mocker.patch("scan.threading.Timer", side_effect=capture_timer)
+        mocker.patch("GBIF.run_scan", side_effect=RuntimeError("GBIF down"))
+
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+
+        assert jobs[jid]["status"] == "error"
+        original_error = jobs[jid]["error"]
+        captured["fn"]()  # should not overwrite the existing error message
+        assert jobs[jid]["error"] == original_error
