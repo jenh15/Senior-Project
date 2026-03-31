@@ -116,7 +116,15 @@ _FAKE_SCAN_RESULT = {
         {"scientific_name": "Myotis sodalis", "gbif_count": 10, "taxon_key": 2435099}
     ],
     "species_context": [
-        {"scientific_name": "Myotis sodalis", "analysis": "Test analysis."}
+        {
+            "scientific_name": "Myotis sodalis",
+            "common_name": "Indiana Bat",
+            "tags": ["Overwintering", "Tree Clearing"],
+            "overview": "Cave-roosting federally endangered bat.",
+            "seasonal_concerns": "Hibernates October through April.",
+            "disruptive_activities": "Tree clearing and noise.",
+            "recommendation": "Avoid winter disturbance.",
+        }
     ],
 }
 
