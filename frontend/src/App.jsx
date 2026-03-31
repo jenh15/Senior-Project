@@ -174,7 +174,7 @@ const validateInputs = () => {
 async function getFreshTurnstileToken() {
   console.log("Getting fresh Turnstile token...");
   if (!window.turnstile || widgetIdRef.current === null) {
-    throw new Error("Verification widget is not ready yet.");
+    throw new Error("Human verification widget is not ready yet. Please wait a moment and try again.");
   }
 
   const existing = window.turnstile.getResponse(widgetIdRef.current);
@@ -513,6 +513,104 @@ async function handleSubmit(event) {
     }
   }
 
+function downloadReport(scanData, meta, formValues) {
+  const scanDate = meta?.scannedAt
+    ? new Date(meta.scannedAt * 1000).toLocaleString()
+    : new Date().toLocaleString();
+  const cacheNote = meta?.cached ? " (cached result)" : "";
+  const location = formValues.address || `${formValues.lat}, ${formValues.lon}`;
+
+  const speciesRows = (scanData.gbif_hits || []).map((hit) => {
+    const ctx = (scanData.species_context || []).find(
+      (c) => c.scientific_name === hit.scientific_name
+    );
+    return `
+      <div class="sp">
+        <div class="sp-header">
+          <div>
+            ${ctx?.common_name ? `<div class="sp-common">${ctx.common_name}</div>` : ""}
+            <div class="sp-sci">${hit.scientific_name}</div>
+          </div>
+          <span class="sp-badge">Flagged</span>
+        </div>
+        <div class="sp-meta">
+          GBIF observations: <strong>${hit.gbif_count}</strong>
+          &nbsp;·&nbsp; Taxon key: <strong>${hit.taxon_key}</strong>
+        </div>
+        <div class="sp-context-label">Construction Planning Context</div>
+        <div class="sp-analysis">${ctx?.analysis || "No ecological context available."}</div>
+      </div>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Environmental Screening Report</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #18322a; margin: 0; padding: 40px; font-size: 14px; }
+    .header { border-bottom: 3px solid #2e7d32; padding-bottom: 16px; margin-bottom: 24px; }
+    .header h1 { margin: 0 0 4px; font-size: 22px; color: #1a3d28; }
+    .header p { margin: 2px 0; color: #557369; font-size: 13px; }
+    .summary { display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+    .stat { background: #f3faf4; border: 1px solid #d9e9dc; border-radius: 10px; padding: 12px 16px; min-width: 130px; }
+    .stat-label { font-size: 11px; color: #557369; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-value { font-size: 22px; font-weight: 800; color: #214e36; }
+    .stat.warn { background: #fffbeb; border: 2px solid #ffc107; }
+    .stat.warn .stat-value { color: #b45309; }
+    .sp { border: 1px solid #dce8de; border-radius: 12px; padding: 18px; margin-bottom: 16px; page-break-inside: avoid; }
+    .sp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .sp-common { font-size: 16px; font-weight: 700; color: #1a3d28; }
+    .sp-sci { font-size: 13px; color: #557369; font-style: italic; margin-top: 2px; }
+    .sp-badge { background: #fff4d8; color: #8d6400; border: 1px solid #efd38e; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .sp-meta { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+    .sp-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #2e7d32; margin-bottom: 6px; }
+    .sp-analysis { font-size: 13px; line-height: 1.7; color: #2b4a40; }
+    .disclaimer { margin-top: 32px; padding: 12px 14px; font-size: 11px; color: #6b7280; background: #f5f5f5; border-left: 3px solid #c7c7c7; border-radius: 4px; line-height: 1.5; }
+    @media print { body { padding: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Environmental Screening Report</h1>
+    <p>Location: ${location}</p>
+    <p>Coordinates: ${formValues.lat}, ${formValues.lon} &nbsp;·&nbsp; Radius: ${formValues.radius_miles} mi</p>
+    <p>Scanned: ${scanDate}${cacheNote}</p>
+  </div>
+
+  <div class="summary">
+    <div class="stat warn">
+      <div class="stat-label">Flagged Species</div>
+      <div class="stat-value">${scanData.gbif_hits?.length ?? 0}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Total Observed</div>
+      <div class="stat-value">${scanData.found_species_count ?? 0}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Radius</div>
+      <div class="stat-value">${scanData.input?.radius_miles ?? 0} mi</div>
+    </div>
+  </div>
+
+  ${speciesRows}
+
+  <div class="disclaimer">
+    ⚠ This report is a preliminary environmental screening aid based on publicly available GBIF occurrence data and AI-generated ecological context.
+    It is NOT authoritative regulatory guidance. Always consult qualified environmental professionals and relevant government agencies before making construction decisions.
+  </div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `environmental-screening-report-${new Date().toISOString().slice(0, 10)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
   // Start of page render
   return (
     <>
@@ -732,20 +830,6 @@ async function handleSubmit(event) {
           
           )}
 
-          {!hasScanned && !loading && (
-            <div className="skeleton-placeholder">
-              <div className="skeleton-summary-row">
-                <div className="skeleton"></div>
-                <div className="skeleton"></div>
-                <div className="skeleton"></div>
-              </div>
-              <div className="skeleton-stack">
-                <div className="skeleton skeleton-card"></div>
-                <div className="skeleton skeleton-card"></div>
-              </div>
-            </div>
-          )}
-
           {loading && (() => {
             const SCAN_STEPS = [
               { label: "Loading taxon lookup", threshold: 10 },
@@ -786,6 +870,34 @@ async function handleSubmit(event) {
             );
           })()}
 
+          {!hasScanned && !loading && (
+            <div className="skeleton-placeholder">
+              <div className="skeleton-summary-row">
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+              </div>
+              <div className="skeleton-stack">
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-card"></div>
+              </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className="skeleton-placeholder loading">
+              <div className="skeleton-summary-row">
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+                <div className="skeleton"></div>
+              </div>
+              <div className="skeleton-stack">
+                <div className="skeleton skeleton-card"></div>
+                <div className="skeleton skeleton-card"></div>
+              </div>
+            </div>
+          )}
+
           {!Object.values(error).some(Boolean) && !loading && hasScanned && data?.gbif_hits?.length === 0 && (
             <div className="success-box">
               <div className="success-icon">✓</div>
@@ -822,6 +934,16 @@ async function handleSubmit(event) {
                 </div>
               </div>
 
+              {data.gbif_hits?.length > 0 && (
+                <button
+                  type="button"
+                  className="btn-download"
+                  onClick={() => downloadReport(data, scanMeta, form)}
+                >
+                  Download Screening Report
+                </button>
+              )}
+
               <div className="stack">
                 {(data.gbif_hits || []).map((hit) => {
                   const context = (data.species_context || []).find(
@@ -831,19 +953,34 @@ async function handleSubmit(event) {
                   return (
                     <article className="species-card" key={hit.taxon_key}>
                       <div className="species-top">
-                        <div>
+                        <div className="species-names">
+                          {context?.common_name && (
+                            <p className="common-name">{context.common_name}</p>
+                          )}
                           <h3>{hit.scientific_name}</h3>
-                          <p className="meta">
-                            GBIF count: {hit.gbif_count} · Taxon key: {hit.taxon_key}
-                          </p>
                         </div>
                         <span className="flag">Flagged</span>
                       </div>
 
-                      <p className="analysis">
-                        {context?.analysis ||
-                          "No AI ecological context was returned for this species."}
-                      </p>
+                      <div className="species-meta-row">
+                        <span className="species-meta-item">
+                          <span className="species-meta-label">GBIF observations</span>
+                          <span className="species-meta-value">{hit.gbif_count}</span>
+                        </span>
+                        <span className="species-meta-sep">·</span>
+                        <span className="species-meta-item">
+                          <span className="species-meta-label">Taxon key</span>
+                          <span className="species-meta-value">{hit.taxon_key}</span>
+                        </span>
+                      </div>
+
+                      <div className="analysis-block">
+                        <p className="analysis-label">Construction Planning Context</p>
+                        <p className="analysis">
+                          {context?.analysis ||
+                            "No AI ecological context was returned for this species."}
+                        </p>
+                      </div>
                     </article>
                   );
                 })}

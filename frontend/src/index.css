@@ -300,12 +300,117 @@ button:disabled {
   border-radius: 999px;
   font-size: 0.82rem;
   font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Species card: name block */
+.species-names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.common-name {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a3d28;
+}
+
+.species-names h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 400;
+  font-style: italic;
+  color: #557369;
+}
+
+/* Species card: metadata row */
+.species-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f5faf6;
+  border-radius: 10px;
+  font-size: 0.82rem;
+}
+
+.species-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.species-meta-label {
+  color: #8aa89e;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.species-meta-value {
+  font-weight: 700;
+  color: #2b4a40;
+}
+
+.species-meta-sep {
+  color: #cfe0d5;
+  font-size: 1.1rem;
+}
+
+/* Species card: analysis section */
+.analysis-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e8f0ea;
+}
+
+.analysis-label {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #2e7d32;
 }
 
 .analysis {
-  margin: 14px 0 0;
-  line-height: 1.65;
+  margin: 0;
+  line-height: 1.7;
   color: #2b4a40;
+  font-size: 0.94rem;
+}
+
+/* Download report button */
+.btn-download {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px auto;
+  background: transparent;
+  border: 1.5px solid #2e7d32;
+  color: #2e7d32;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.btn-download::before {
+  content: "↓";
+  font-size: 1rem;
+}
+
+.btn-download:hover {
+  background: #2e7d32;
+  color: #fff;
+  box-shadow: none;
 }
 
 .loading-box {
@@ -651,8 +756,11 @@ main {
 .skeleton {
   background: linear-gradient(90deg, #e4ede6 25%, #f0f7f1 50%, #e4ede6 75%);
   background-size: 600px 100%;
-  animation: shimmer 0.6s ease-in-out;
   border-radius: 12px;
+}
+
+.skeleton-placeholder.loading .skeleton {
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 .skeleton-placeholder {
