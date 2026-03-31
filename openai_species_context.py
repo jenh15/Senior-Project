@@ -57,10 +57,11 @@ Flagged species:
 
 For EACH species, provide:
 1. scientific_name
-2. a short paragraph of practical construction-planning context
-3. likely important seasonal considerations such as breeding, nesting, migration, roosting, dormancy, or spawning if relevant
-4. likely disruptive construction activities such as noise, tree clearing, grading, vibration, water disturbance, or nighttime lighting
-5. a cautious recommendation for when construction may be less disruptive, if reasonable
+2. common_name (the widely-used English common name for this species)
+3. a short paragraph of practical construction-planning context
+4. likely important seasonal considerations such as breeding, nesting, migration, roosting, dormancy, or spawning if relevant
+5. likely disruptive construction activities such as noise, tree clearing, grading, vibration, water disturbance, or nighttime lighting
+6. a cautious recommendation for when construction may be less disruptive, if reasonable
 
 Important rules:
 - Do not invent legal requirements
@@ -74,6 +75,7 @@ Return ONLY valid JSON in this exact format:
   "species_context": [
     {{
       "scientific_name": "Species name here",
+      "common_name": "Common name here",
       "analysis": "One paragraph here"
     }}
   ]
