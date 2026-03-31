@@ -524,6 +524,20 @@ function downloadReport(scanData, meta, formValues) {
     const ctx = (scanData.species_context || []).find(
       (c) => c.scientific_name === hit.scientific_name
     );
+    const tagPills = (ctx?.tags || []).map(
+      (t) => `<span class="sp-tag">${t}</span>`
+    ).join("");
+    const sections = [
+      { label: "Overview", key: "overview" },
+      { label: "Seasonal Concerns", key: "seasonal_concerns" },
+      { label: "Disruptive Activities", key: "disruptive_activities" },
+      { label: "Planning Recommendation", key: "recommendation" },
+    ].filter(({ key }) => ctx?.[key])
+     .map(({ label, key }) => `
+        <div class="sp-section">
+          <div class="sp-context-label">${label}</div>
+          <div class="sp-analysis">${ctx[key]}</div>
+        </div>`).join("");
     return `
       <div class="sp">
         <div class="sp-header">
@@ -537,8 +551,8 @@ function downloadReport(scanData, meta, formValues) {
           GBIF observations: <strong>${hit.gbif_count}</strong>
           &nbsp;·&nbsp; Taxon key: <strong>${hit.taxon_key}</strong>
         </div>
-        <div class="sp-context-label">Construction Planning Context</div>
-        <div class="sp-analysis">${ctx?.analysis || "No ecological context available."}</div>
+        ${tagPills ? `<div class="sp-tags">${tagPills}</div>` : ""}
+        ${sections || `<div class="sp-analysis">No ecological context available.</div>`}
       </div>`;
   }).join("");
 
@@ -563,9 +577,12 @@ function downloadReport(scanData, meta, formValues) {
     .sp-common { font-size: 16px; font-weight: 700; color: #1a3d28; }
     .sp-sci { font-size: 13px; color: #557369; font-style: italic; margin-top: 2px; }
     .sp-badge { background: #fff4d8; color: #8d6400; border: 1px solid #efd38e; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .sp-meta { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
-    .sp-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #2e7d32; margin-bottom: 6px; }
-    .sp-analysis { font-size: 13px; line-height: 1.7; color: #2b4a40; }
+    .sp-meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+    .sp-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .sp-tag { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .sp-section { margin-bottom: 10px; }
+    .sp-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #2e7d32; margin-bottom: 4px; }
+    .sp-analysis { font-size: 13px; line-height: 1.7; color: #2b4a40; margin: 0; }
     .disclaimer { margin-top: 32px; padding: 12px 14px; font-size: 11px; color: #6b7280; background: #f5f5f5; border-left: 3px solid #c7c7c7; border-radius: 4px; line-height: 1.5; }
     @media print { body { padding: 24px; } }
   </style>
@@ -832,10 +849,11 @@ function downloadReport(scanData, meta, formValues) {
 
           {loading && (() => {
             const SCAN_STEPS = [
+              { label: "Validating Human", threshold: 1 },
               { label: "Loading taxon lookup", threshold: 10 },
               { label: "Querying GBIF species", threshold: 35 },
               { label: "Cross-referencing endangered species", threshold: 60 },
-              { label: "Generating AI ecological context", threshold: 85 },
+              { label: "Generating AI ecological context", threshold: 86 },
               { label: "Finalizing results", threshold: 100 },
             ];
             return (
@@ -974,12 +992,42 @@ function downloadReport(scanData, meta, formValues) {
                         </span>
                       </div>
 
+                      {context?.tags?.length > 0 && (
+                        <div className="species-tags">
+                          {context.tags.map((tag) => (
+                            <span className="species-tag" key={tag}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="analysis-block">
-                        <p className="analysis-label">Construction Planning Context</p>
-                        <p className="analysis">
-                          {context?.analysis ||
-                            "No AI ecological context was returned for this species."}
-                        </p>
+                        {context?.overview && (
+                          <div className="analysis-section">
+                            <p className="analysis-label">Overview</p>
+                            <p className="analysis">{context.overview}</p>
+                          </div>
+                        )}
+                        {context?.seasonal_concerns && (
+                          <div className="analysis-section">
+                            <p className="analysis-label">Seasonal Concerns</p>
+                            <p className="analysis">{context.seasonal_concerns}</p>
+                          </div>
+                        )}
+                        {context?.disruptive_activities && (
+                          <div className="analysis-section">
+                            <p className="analysis-label">Disruptive Activities</p>
+                            <p className="analysis">{context.disruptive_activities}</p>
+                          </div>
+                        )}
+                        {context?.recommendation && (
+                          <div className="analysis-section">
+                            <p className="analysis-label">Planning Recommendation</p>
+                            <p className="analysis">{context.recommendation}</p>
+                          </div>
+                        )}
+                        {!context?.overview && !context?.seasonal_concerns && !context?.disruptive_activities && !context?.recommendation && (
+                          <p className="analysis">No AI ecological context was returned for this species.</p>
+                        )}
                       </div>
                     </article>
                   );

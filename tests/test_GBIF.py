@@ -420,3 +420,81 @@ class TestGbifSpeciesCountsInArea:
         GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
         params = mock_get.call_args[1]["params"] if mock_get.call_args[1] else mock_get.call_args[0][1]
         assert "year" in params
+
+    # -- Network / HTTP error handling --
+
+    def test_timeout_raises_runtime_error(self, mocker):
+        import requests as req
+        mocker.patch("GBIF.requests.get", side_effect=req.exceptions.Timeout())
+        with pytest.raises(RuntimeError, match="timed out"):
+            GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
+
+    def test_connection_error_raises_runtime_error(self, mocker):
+        import requests as req
+        mocker.patch("GBIF.requests.get", side_effect=req.exceptions.ConnectionError())
+        with pytest.raises(RuntimeError, match="connect"):
+            GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
+
+    def test_http_error_raises_runtime_error(self, mocker):
+        import requests as req
+        mock_resp = MagicMock()
+        mock_resp.status_code = 503
+        mocker.patch(
+            "GBIF.requests.get",
+            side_effect=req.exceptions.HTTPError(response=mock_resp),
+        )
+        with pytest.raises(RuntimeError, match="503"):
+            GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
+
+    def test_generic_request_error_raises_runtime_error(self, mocker):
+        import requests as req
+        mocker.patch("GBIF.requests.get", side_effect=req.exceptions.RequestException("boom"))
+        with pytest.raises(RuntimeError, match="boom"):
+            GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
+
+    def test_empty_facets_returns_empty_list(self, mocker):
+        """GBIF sometimes returns no facets when area has no observations."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"facets": []}
+        mock_resp.raise_for_status = MagicMock()
+        mocker.patch("GBIF.requests.get", return_value=mock_resp)
+        result = GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
+        assert result == []
+
+    def test_missing_facets_key_returns_empty_list(self, mocker):
+        """Response missing 'facets' key entirely should not crash."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {}
+        mock_resp.raise_for_status = MagicMock()
+        mocker.patch("GBIF.requests.get", return_value=mock_resp)
+        result = GBIF.gbif_species_counts_in_area(41.8781, -87.6298, 5.0)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# 6. load_precomputed_taxon_keys() — file error handling
+# ---------------------------------------------------------------------------
+
+class TestLoadPrecomputedTaxonKeysErrors:
+
+    def test_missing_file_raises_runtime_error(self):
+        with pytest.raises(RuntimeError, match="not found"):
+            GBIF.load_precomputed_taxon_keys("/nonexistent/path/IllinoisTaxonLookup.csv")
+
+    def test_missing_file_error_message_includes_path(self):
+        bad_path = "/nonexistent/path/IllinoisTaxonLookup.csv"
+        with pytest.raises(RuntimeError, match=bad_path):
+            GBIF.load_precomputed_taxon_keys(bad_path)
+
+    def test_malformed_key_row_is_skipped_and_valid_row_loaded(self):
+        """A row with a non-integer key must be skipped; other rows must load."""
+        path = _write_temp_csv(
+            [
+                {"Scientific Name": "Bad Species", "Taxon Key": "not-a-number"},
+                {"Scientific Name": "Myotis sodalis", "Taxon Key": "2435099"},
+            ],
+            ["Scientific Name", "Taxon Key"],
+        )
+        name_to_key, _ = GBIF.load_precomputed_taxon_keys(path)
+        assert "Bad Species" not in name_to_key
+        assert "Myotis sodalis" in name_to_key

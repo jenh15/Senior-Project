@@ -69,13 +69,23 @@ async def verify_turnstile(token: str, remote_ip: Optional[str] = None) -> bool:
     if remote_ip:
         payload["remoteip"] = remote_ip
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-            data=payload,
-        )
-        resp.raise_for_status()
-        result = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data=payload,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+    except httpx.TimeoutException:
+        logger.error("Turnstile verification timed out")
+        raise HTTPException(status_code=503, detail="Human verification service timed out. Please try again.")
+    except httpx.HTTPStatusError as exc:
+        logger.error("Turnstile returned HTTP %s", exc.response.status_code)
+        raise HTTPException(status_code=502, detail="Human verification service returned an error. Please try again.")
+    except httpx.RequestError as exc:
+        logger.error("Turnstile request failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not reach human verification service. Please try again.")
 
     return bool(result.get("success", False))
 

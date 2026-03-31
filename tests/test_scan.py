@@ -19,6 +19,7 @@ import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -116,7 +117,15 @@ _FAKE_SCAN_RESULT = {
         {"scientific_name": "Myotis sodalis", "gbif_count": 10, "taxon_key": 2435099}
     ],
     "species_context": [
-        {"scientific_name": "Myotis sodalis", "analysis": "Test analysis."}
+        {
+            "scientific_name": "Myotis sodalis",
+            "common_name": "Indiana Bat",
+            "tags": ["Overwintering", "Tree Clearing"],
+            "overview": "Cave-roosting federally endangered bat.",
+            "seasonal_concerns": "Hibernates October through April.",
+            "disruptive_activities": "Tree clearing and noise.",
+            "recommendation": "Avoid winter disturbance.",
+        }
     ],
 }
 
@@ -368,6 +377,18 @@ def _build_httpx_mock(mocker, json_payload: dict):
     mock_client.post = AsyncMock(return_value=mock_response)
 
     mocker.patch("scan.httpx.AsyncClient", return_value=mock_client)
+    return mock_client
+
+
+def _make_raising_async_client(exception: Exception) -> AsyncMock:
+    """
+    Return an async context manager mock whose .post() raises the given exception.
+    Used to simulate Cloudflare Turnstile network failures.
+    """
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(side_effect=exception)
     return mock_client
 
 
@@ -801,3 +822,98 @@ class TestRunScanJobWatchdog:
         original_error = jobs[jid]["error"]
         captured["fn"]()  # should not overwrite the existing error message
         assert jobs[jid]["error"] == original_error
+
+
+# ---------------------------------------------------------------------------
+# 10. verify_turnstile() — network error handling
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_verify_turnstile_timeout_raises_503(mocker):
+    """If Cloudflare times out, verify_turnstile must raise HTTP 503."""
+    from fastapi import HTTPException
+    mocker.patch(
+        "scan.httpx.AsyncClient",
+        return_value=_make_raising_async_client(httpx.TimeoutException("timed out", request=None)),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await scan.verify_turnstile("tok", "1.2.3.4")
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.anyio
+async def test_verify_turnstile_connection_error_raises_502(mocker):
+    """If Cloudflare is unreachable, verify_turnstile must raise HTTP 502."""
+    from fastapi import HTTPException
+    mocker.patch(
+        "scan.httpx.AsyncClient",
+        return_value=_make_raising_async_client(httpx.ConnectError("refused", request=None)),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await scan.verify_turnstile("tok", "1.2.3.4")
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.anyio
+async def test_verify_turnstile_http_status_error_raises_502(mocker):
+    """If Cloudflare returns a 5xx, verify_turnstile must raise HTTP 502."""
+    from fastapi import HTTPException
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+    mocker.patch(
+        "scan.httpx.AsyncClient",
+        return_value=_make_raising_async_client(
+            httpx.HTTPStatusError("error", request=None, response=mock_resp)
+        ),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await scan.verify_turnstile("tok", "1.2.3.4")
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.anyio
+async def test_verify_turnstile_timeout_error_message_is_user_friendly(mocker):
+    mocker.patch(
+        "scan.httpx.AsyncClient",
+        return_value=_make_raising_async_client(httpx.TimeoutException("timed out", request=None)),
+    )
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        await scan.verify_turnstile("tok")
+    assert "try again" in exc_info.value.detail.lower()
+
+
+# ---------------------------------------------------------------------------
+# 11. run_scan_job() — GBIF-specific error messages
+# ---------------------------------------------------------------------------
+
+class TestRunScanJobErrorMessages:
+
+    def _seed_job(self, job_id):
+        jobs[job_id] = {
+            "status": "queued", "step": "Queued", "progress": 0,
+            "result": None, "error": None, "cached": False,
+            "created_at": time.time(), "started_at": None, "completed_at": None,
+        }
+
+    def test_gbif_timeout_error_message_stored(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mocker.patch("GBIF.run_scan", side_effect=RuntimeError("GBIF API request timed out"))
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+        assert "timed out" in jobs[jid]["error"].lower()
+
+    def test_gbif_connection_error_message_stored(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mocker.patch("GBIF.run_scan", side_effect=RuntimeError("Could not connect to the GBIF API"))
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+        assert "connect" in jobs[jid]["error"].lower()
+
+    def test_csv_not_found_error_message_stored(self, mocker):
+        jid = str(uuid.uuid4())
+        self._seed_job(jid)
+        mocker.patch("GBIF.run_scan", side_effect=RuntimeError("Illinois taxon lookup CSV not found"))
+        run_scan_job(jid, 41.8781, -87.6298, 5.0)
+        assert jobs[jid]["status"] == "error"
+        assert "csv" in jobs[jid]["error"].lower() or "taxon" in jobs[jid]["error"].lower()

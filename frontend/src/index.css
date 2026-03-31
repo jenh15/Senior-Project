@@ -304,6 +304,25 @@ button:disabled {
   flex-shrink: 0;
 }
 
+/* Species card: concern tags */
+.species-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.species-tag {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Species card: name block */
 .species-names {
   display: flex;
@@ -366,6 +385,15 @@ button:disabled {
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid #e8f0ea;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .analysis-label {

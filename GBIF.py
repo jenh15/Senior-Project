@@ -48,7 +48,17 @@ def load_precomputed_taxon_keys(path: str) -> dict[str, int]:
     name_to_key = {}
     key_to_name = {}
 
-    with open(path, newline="", encoding="utf-8") as f:
+    try:
+        f_handle = open(path, newline="", encoding="utf-8")
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"Illinois taxon lookup CSV not found at '{path}'. "
+            "Ensure the data file is present before running a scan."
+        )
+    except OSError as exc:
+        raise RuntimeError(f"Could not open taxon lookup CSV '{path}': {exc}") from exc
+
+    with f_handle as f:
         reader = csv.DictReader(f)
 
         for row in reader:
@@ -60,7 +70,7 @@ def load_precomputed_taxon_keys(path: str) -> dict[str, int]:
                     name_to_key[name] = int(key)
                     key_to_name[int(key)] = name
                 except ValueError:
-                    pass
+                    logger.warning("Skipping malformed taxon CSV row: name=%r key=%r", name, key)
 
     return name_to_key, key_to_name
 
@@ -80,9 +90,25 @@ def gbif_species_counts_in_area(lat: float, lon: float, radius_miles: float) -> 
         "limit": 0,
     }
 
-    j = requests.get(GBIF_OCC_SEARCH, params=params, timeout=120).json()
+    try:
+        resp = requests.get(GBIF_OCC_SEARCH, params=params, timeout=120)
+        resp.raise_for_status()
+        j = resp.json()
+    except requests.exceptions.Timeout:
+        raise RuntimeError("GBIF API request timed out. The service may be slow or unreachable.")
+    except requests.exceptions.ConnectionError:
+        raise RuntimeError("Could not connect to the GBIF API. Check network connectivity.")
+    except requests.exceptions.HTTPError as exc:
+        raise RuntimeError(f"GBIF API returned an error: HTTP {exc.response.status_code}") from exc
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"GBIF API request failed: {exc}") from exc
 
-    counts = j.get("facets", [])[0].get("counts", [])
+    facets = j.get("facets", [])
+    if not facets:
+        logger.warning("GBIF returned no facets for this bounding box — no species found")
+        return []
+
+    counts = facets[0].get("counts", [])
     return [(int(row["name"]), int(row["count"])) for row in counts if row.get("name")]
 
 
