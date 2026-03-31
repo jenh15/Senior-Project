@@ -304,6 +304,43 @@ button:disabled {
   flex-shrink: 0;
 }
 
+
+/* Species card: left group (thumbnail + names side by side) */
+.species-top-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Species card: Wikipedia thumbnail */
+.species-thumb-link {
+  display: block;
+  flex-shrink: 0;
+}
+
+.species-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d9e3dc;
+  display: block;
+}
+
+/* Species card: Wikipedia link */
+.wiki-link {
+  font-size: 0.78rem;
+  color: #2e7d32;
+  text-decoration: none;
+  font-weight: 500;
+  margin-top: 3px;
+  display: inline-block;
+}
+
+.wiki-link:hover {
+  text-decoration: underline;
+}
+
 /* Species card: concern tags */
 .species-tags {
   display: flex;

@@ -11,6 +11,98 @@ import mapTilerLogo from "./assets/mapTilerLogo.svg";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 
+function SpeciesCard({ hit, context }) {
+  const [thumb, setThumb] = useState(null);
+  const wikiName = hit.scientific_name.replace(/ /g, "_");
+  const wikiUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(wikiName)}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiName)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.thumbnail?.source) {
+          setThumb(data.thumbnail.source);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [wikiName]);
+
+  return (
+    <article className="species-card">
+      <div className="species-top">
+        <div className="species-top-left">
+          {thumb && (
+            <a href={wikiUrl} target="_blank" rel="noreferrer noopener" className="species-thumb-link">
+              <img src={thumb} alt={hit.scientific_name} className="species-thumb" />
+            </a>
+          )}
+          <div className="species-names">
+            {context?.common_name && <p className="common-name">{context.common_name}</p>}
+            <h3>{hit.scientific_name}</h3>
+            <a href={wikiUrl} target="_blank" rel="noreferrer noopener" className="wiki-link">
+              Wikipedia ↗
+            </a>
+          </div>
+        </div>
+        <span className="flag">Flagged</span>
+      </div>
+
+      <div className="species-meta-row">
+        <span className="species-meta-item">
+          <span className="species-meta-label">GBIF observations</span>
+          <span className="species-meta-value">{hit.gbif_count}</span>
+        </span>
+        <span className="species-meta-sep">·</span>
+        <span className="species-meta-item">
+          <span className="species-meta-label">Taxon key</span>
+          <span className="species-meta-value">{hit.taxon_key}</span>
+        </span>
+      </div>
+      
+
+      {context?.tags?.length > 0 && (
+        <div className="species-tags">
+          {context.tags.map((tag) => (
+            <span className="species-tag" key={tag}>{tag}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="analysis-block">
+        {context?.overview && (
+          <div className="analysis-section">
+            <p className="analysis-label">Overview</p>
+            <p className="analysis">{context.overview}</p>
+          </div>
+        )}
+        {context?.seasonal_concerns && (
+          <div className="analysis-section">
+            <p className="analysis-label">Seasonal Concerns</p>
+            <p className="analysis">{context.seasonal_concerns}</p>
+          </div>
+        )}
+        {context?.disruptive_activities && (
+          <div className="analysis-section">
+            <p className="analysis-label">Disruptive Activities</p>
+            <p className="analysis">{context.disruptive_activities}</p>
+          </div>
+        )}
+        {context?.recommendation && (
+          <div className="analysis-section">
+            <p className="analysis-label">Planning Recommendation</p>
+            <p className="analysis">{context.recommendation}</p>
+          </div>
+        )}
+        {!context?.overview && !context?.seasonal_concerns && !context?.disruptive_activities && !context?.recommendation && (
+          <p className="analysis">No AI ecological context was returned for this species.</p>
+        )}
+      </div>
+    </article>
+  );
+}
+
 const initialForm = { // SIUE engineering building
   address: "Engineering Building, Southern Illinois University Edwardsville",
   lat: "38.792",
@@ -57,6 +149,7 @@ export default function App() {
   const [lookingUpAddress, setLookingUpAddress] = useState(false);
   const [lookingUpCoords, setLookingUpCoords] = useState(false);
   const [scanMeta, setScanMeta] = useState(null);
+  const [finalizing, setFinalizing] = useState(false);
 
   const [notifications, setNotifications] = useState([]);
 
@@ -269,6 +362,10 @@ function pollScanStatus(scanJobId) {
       if (statusJson.status === "complete") {
         setProgress(100);
         clearInterval(interval);
+        setFinalizing(true);
+
+        // Stop the "Finalizing results" spinner 1s before results appear
+        setTimeout(() => setFinalizing(false), 3000);
 
         setTimeout(() => {
           const isCached = statusJson.cached ?? false;
@@ -287,7 +384,7 @@ function pollScanStatus(scanJobId) {
           } else {
             showToast(timeStr ? `Live result · scanned at ${timeStr}` : "Scan complete", "success");
           }
-        }, 4000); // Small delay to ensure progress update is seen
+        }, 4000);
 
         return;
       }
@@ -406,6 +503,7 @@ function resetResults() {
   setJobId(null);
   setProgress(0);
   setScanMeta(null);
+  setFinalizing(false);
 }
 
 function timeAgo(unixTimestamp) {
@@ -867,10 +965,13 @@ function downloadReport(scanData, meta, formValues) {
                 </div>
                 <ol className="scan-steps">
                   {SCAN_STEPS.map((step) => {
-                    const done = progress >= step.threshold;
-                    const active = !done && SCAN_STEPS.find(
-                      (s) => progress < s.threshold
-                    ) === step;
+                    const isLastStep = step.threshold === 100;
+                    const done = isLastStep
+                      ? progress >= step.threshold && !finalizing
+                      : progress >= step.threshold;
+                    const active = isLastStep
+                      ? finalizing
+                      : !done && SCAN_STEPS.find((s) => progress < s.threshold) === step;
                     return (
                       <li
                         key={step.label}
@@ -968,69 +1069,7 @@ function downloadReport(scanData, meta, formValues) {
                     (item) => item.scientific_name === hit.scientific_name
                   );
 
-                  return (
-                    <article className="species-card" key={hit.taxon_key}>
-                      <div className="species-top">
-                        <div className="species-names">
-                          {context?.common_name && (
-                            <p className="common-name">{context.common_name}</p>
-                          )}
-                          <h3>{hit.scientific_name}</h3>
-                        </div>
-                        <span className="flag">Flagged</span>
-                      </div>
-
-                      <div className="species-meta-row">
-                        <span className="species-meta-item">
-                          <span className="species-meta-label">GBIF observations</span>
-                          <span className="species-meta-value">{hit.gbif_count}</span>
-                        </span>
-                        <span className="species-meta-sep">·</span>
-                        <span className="species-meta-item">
-                          <span className="species-meta-label">Taxon key</span>
-                          <span className="species-meta-value">{hit.taxon_key}</span>
-                        </span>
-                      </div>
-
-                      {context?.tags?.length > 0 && (
-                        <div className="species-tags">
-                          {context.tags.map((tag) => (
-                            <span className="species-tag" key={tag}>{tag}</span>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="analysis-block">
-                        {context?.overview && (
-                          <div className="analysis-section">
-                            <p className="analysis-label">Overview</p>
-                            <p className="analysis">{context.overview}</p>
-                          </div>
-                        )}
-                        {context?.seasonal_concerns && (
-                          <div className="analysis-section">
-                            <p className="analysis-label">Seasonal Concerns</p>
-                            <p className="analysis">{context.seasonal_concerns}</p>
-                          </div>
-                        )}
-                        {context?.disruptive_activities && (
-                          <div className="analysis-section">
-                            <p className="analysis-label">Disruptive Activities</p>
-                            <p className="analysis">{context.disruptive_activities}</p>
-                          </div>
-                        )}
-                        {context?.recommendation && (
-                          <div className="analysis-section">
-                            <p className="analysis-label">Planning Recommendation</p>
-                            <p className="analysis">{context.recommendation}</p>
-                          </div>
-                        )}
-                        {!context?.overview && !context?.seasonal_concerns && !context?.disruptive_activities && !context?.recommendation && (
-                          <p className="analysis">No AI ecological context was returned for this species.</p>
-                        )}
-                      </div>
-                    </article>
-                  );
+                  return <SpeciesCard key={hit.taxon_key} hit={hit} context={context} />;
                 })}
               </div>
             </>
