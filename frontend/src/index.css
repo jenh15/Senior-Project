@@ -964,7 +964,7 @@ body {
 
 /* GBIF meta strip */
 .species-meta {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 14px;
   padding: 8px 12px;

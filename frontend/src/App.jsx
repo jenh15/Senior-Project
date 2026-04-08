@@ -637,84 +637,223 @@ function downloadReport(scanData, meta, formValues) {
         </div>`).join("");
     return `
       <div class="sp">
-        <div class="sp-header">
-          <div>
-            ${ctx?.common_name ? `<div class="sp-common">${ctx.common_name}</div>` : ""}
-            <div class="sp-sci">${hit.scientific_name}</div>
+        <div class="sp-inner">
+          <div class="sp-header">
+            <div>
+              ${ctx?.common_name ? `<div class="sp-common">${ctx.common_name}</div>` : ""}
+              <div class="sp-sci">${hit.scientific_name}</div>
+            </div>
+            <span class="sp-badge">Flagged</span>
           </div>
-          <span class="sp-badge">Flagged</span>
+          <div class="sp-meta">
+            <span>GBIF Observations</span><strong>${hit.gbif_count}</strong>
+            <div class="sp-meta-divider"></div>
+            <span>Taxon Key</span><strong>${hit.taxon_key}</strong>
+          </div>
+          ${tagPills ? `<div class="sp-tags">${tagPills}</div>` : ""}
+          ${sections || `<div class="sp-analysis">No ecological context available.</div>`}
         </div>
-        <div class="sp-meta">
-          GBIF observations: <strong>${hit.gbif_count}</strong>
-          &nbsp;·&nbsp; Taxon key: <strong>${hit.taxon_key}</strong>
-        </div>
-        ${tagPills ? `<div class="sp-tags">${tagPills}</div>` : ""}
-        ${sections || `<div class="sp-analysis">No ecological context available.</div>`}
       </div>`;
   }).join("");
 
   const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Environmental Screening Report</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #18322a; margin: 0; padding: 40px; font-size: 14px; }
-    .header { border-bottom: 3px solid #2e7d32; padding-bottom: 16px; margin-bottom: 24px; }
-    .header h1 { margin: 0 0 4px; font-size: 22px; color: #1a3d28; }
-    .header p { margin: 2px 0; color: #557369; font-size: 13px; }
-    .summary { display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
-    .stat { background: #f3faf4; border: 1px solid #d9e9dc; border-radius: 10px; padding: 12px 16px; min-width: 130px; }
-    .stat-label { font-size: 11px; color: #557369; text-transform: uppercase; letter-spacing: 0.05em; }
-    .stat-value { font-size: 22px; font-weight: 800; color: #214e36; }
-    .stat.warn { background: #fffbeb; border: 2px solid #ffc107; }
-    .stat.warn .stat-value { color: #b45309; }
-    .sp { border: 1px solid #dce8de; border-radius: 12px; padding: 18px; margin-bottom: 16px; page-break-inside: avoid; }
-    .sp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .sp-common { font-size: 16px; font-weight: 700; color: #1a3d28; }
-    .sp-sci { font-size: 13px; color: #557369; font-style: italic; margin-top: 2px; }
-    .sp-badge { background: #fff4d8; color: #8d6400; border: 1px solid #efd38e; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-    .sp-meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
-    .sp-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-    .sp-tag { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-    .sp-section { margin-bottom: 10px; }
-    .sp-context-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #2e7d32; margin-bottom: 4px; }
-    .sp-analysis { font-size: 13px; line-height: 1.7; color: #2b4a40; margin: 0; }
-    .disclaimer { margin-top: 32px; padding: 12px 14px; font-size: 11px; color: #6b7280; background: #f5f5f5; border-left: 3px solid #c7c7c7; border-radius: 4px; line-height: 1.5; }
-    @media print { body { padding: 24px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>Environmental Screening Report</h1>
-    <p>Location: ${location}</p>
-    <p>Coordinates: ${formValues.lat}, ${formValues.lon} &nbsp;·&nbsp; Radius: ${formValues.radius_miles} mi</p>
-    <p>Scanned: ${scanDate}${cacheNote}</p>
-  </div>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8"/>
+        <title>Environmental Screening Report</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+        <style>
+          *, *::before, *::after { box-sizing: border-box; }
+          body {
+            font-family: 'Figtree', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #EDEBE4;
+            color: #1B1916;
+            margin: 0;
+            padding: 40px;
+            font-size: 14px;
+            line-height: 1.6;
+          }
+          .page { max-width: 860px; margin: 0 auto; }
 
-  <div class="summary">
-    <div class="stat warn">
-      <div class="stat-label">Flagged Species</div>
-      <div class="stat-value">${scanData.gbif_hits?.length ?? 0}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Total Observed</div>
-      <div class="stat-value">${scanData.found_species_count ?? 0}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Radius</div>
-      <div class="stat-value">${scanData.input?.radius_miles ?? 0} mi</div>
-    </div>
-  </div>
+          /* Header */
+          .header {
+            background: #1A3C29;
+            color: #fff;
+            border-radius: 12px;
+            padding: 24px 28px;
+            margin-bottom: 24px;
+          }
+          .header-eyebrow {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #A8C8B4;
+            margin-bottom: 6px;
+          }
+          .header h1 { margin: 0 0 12px; font-size: 22px; font-weight: 800; color: #fff; }
+          .header-meta { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 12px; color: #CCE2D6; }
+          .header-meta strong { color: #fff; font-weight: 600; }
 
-  ${speciesRows}
+          /* Summary stats */
+          .summary { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+          .stat {
+            background: #fff;
+            border: 1px solid #D0CBC1;
+            border-radius: 10px;
+            padding: 14px 18px;
+            min-width: 140px;
+          }
+          .stat-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #8C887F;
+            margin-bottom: 4px;
+          }
+          .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1B1916;
+          }
+          .stat.warn { background: #FEF9F2; border-color: #F0D0A0; border-width: 1px; }
+          .stat.warn .stat-value { color: #9E5010; }
+          .stat.warn .stat-label { color: #C06B18; }
 
-  <div class="disclaimer">
-    ⚠ This report is a preliminary environmental screening aid based on publicly available GBIF occurrence data and AI-generated ecological context.
-    It is NOT authoritative regulatory guidance. Always consult qualified environmental professionals and relevant government agencies before making construction decisions.
-  </div>
-</body>
-</html>`;
+          /* Species cards */
+          .sp {
+            background: #fff;
+            border: 1px solid #D0CBC1;
+            border-radius: 10px;
+            margin-bottom: 14px;
+            overflow: hidden;
+            page-break-inside: avoid;
+            position: relative;
+          }
+          .sp::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: #D9914D;
+            border-radius: 10px 0 0 10px;
+          }
+          .sp-inner { padding: 16px 18px 16px 22px; }
+          .sp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 12px; }
+          .sp-common { font-size: 15px; font-weight: 700; color: #1B1916; }
+          .sp-sci { font-size: 12px; color: #5A5650; font-style: italic; margin-top: 2px; }
+          .sp-badge {
+            background: #FBF0DC;
+            color: #9E5010;
+            border: 1px solid #F0D0A0;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            flex-shrink: 0;
+          }
+          .sp-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: #F6F4EF;
+            border: 1px solid #E2DDD6;
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            font-size: 11px;
+            color: #5A5650;
+          }
+          .sp-meta strong {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            color: #1B1916;
+          }
+          .sp-meta-divider { width: 1px; height: 16px; background: #D0CBC1; }
+          .sp-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+          .sp-tag {
+            background: #EBF5EF;
+            color: #235436;
+            border: 1px solid #CCE2D6;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+          }
+          .sp-section { margin-bottom: 10px; }
+          .sp-context-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #235436;
+            margin-bottom: 4px;
+          }
+          .sp-analysis { font-size: 13px; line-height: 1.7; color: #3E3B34; margin: 0; }
+
+          /* Disclaimer */
+          .disclaimer {
+            margin-top: 28px;
+            padding: 12px 16px;
+            font-size: 11px;
+            color: #5A5650;
+            background: #FEF9F2;
+            border: 1px solid #F0D0A0;
+            border-left: 3px solid #D9914D;
+            border-radius: 6px;
+            line-height: 1.6;
+          }
+
+          @media print {
+            body { background: #fff; padding: 24px; }
+            .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+      <div class="page">
+        <div class="header">
+          <div class="header-eyebrow">Illinois · Preliminary Screening · EcoRisk AI</div>
+          <h1>Environmental Screening Report</h1>
+          <div class="header-meta">
+            <span><strong>Location:</strong> ${location}</span>
+            <span><strong>Coordinates:</strong> ${formValues.lat}, ${formValues.lon}</span>
+            <span><strong>Radius:</strong> ${formValues.radius_miles} mi</span>
+            <span><strong>Scanned:</strong> ${scanDate}${cacheNote}</span>
+          </div>
+        </div>
+
+        <div class="summary">
+          <div class="stat warn">
+            <div class="stat-label">Flagged Species</div>
+            <div class="stat-value">${scanData.gbif_hits?.length ?? 0}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Total Observed</div>
+            <div class="stat-value">${scanData.found_species_count ?? 0}</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Search Radius</div>
+            <div class="stat-value">${scanData.input?.radius_miles ?? 0} mi</div>
+          </div>
+        </div>
+
+        ${speciesRows}
+
+        <div class="disclaimer">
+          ⚠ This report is a preliminary environmental screening aid based on publicly available GBIF occurrence data and AI-generated ecological context.
+          It is NOT authoritative regulatory guidance. Always consult qualified environmental professionals and relevant government agencies before making construction decisions.
+        </div>
+      </div>
+      </body>
+      </html>`;
 
   const blob = new Blob([html], { type: "text/html" });
   const url = URL.createObjectURL(blob);
