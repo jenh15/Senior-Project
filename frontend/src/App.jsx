@@ -30,37 +30,36 @@ function SpeciesCard({ hit, context }) {
   }, [wikiName]);
 
   return (
-    <article className="species-card">
-      <div className="species-top">
-        <div className="species-top-left">
+    <div className="species-report">
+      <div className="report-header">
+        <div className="species-identity">
           {thumb && (
             <a href={wikiUrl} target="_blank" rel="noreferrer noopener" className="species-thumb-link">
               <img src={thumb} alt={hit.scientific_name} className="species-thumb" />
             </a>
           )}
           <div className="species-names">
-            {context?.common_name && <p className="common-name">{context.common_name}</p>}
-            <h3>{hit.scientific_name}</h3>
+            {context?.common_name && <p className="species-common">{context.common_name}</p>}
+            <p className="species-scientific">{hit.scientific_name}</p>
             <a href={wikiUrl} target="_blank" rel="noreferrer noopener" className="wiki-link">
               Wikipedia ↗
             </a>
           </div>
         </div>
-        <span className="flag">Flagged</span>
+        <span className="flagged-chip">Flagged</span>
       </div>
 
-      <div className="species-meta-row">
-        <span className="species-meta-item">
-          <span className="species-meta-label">GBIF observations</span>
-          <span className="species-meta-value">{hit.gbif_count}</span>
-        </span>
-        <span className="species-meta-sep">·</span>
-        <span className="species-meta-item">
-          <span className="species-meta-label">Taxon key</span>
-          <span className="species-meta-value">{hit.taxon_key}</span>
-        </span>
+      <div className="species-meta">
+        <div className="meta-item">
+          <span className="meta-label">GBIF Observations</span>
+          <span className="meta-value">{hit.gbif_count}</span>
+        </div>
+        <div className="meta-divider" />
+        <div className="meta-item">
+          <span className="meta-label">Taxon Key</span>
+          <span className="meta-value">{hit.taxon_key}</span>
+        </div>
       </div>
-      
 
       {context?.tags?.length > 0 && (
         <div className="species-tags">
@@ -74,32 +73,32 @@ function SpeciesCard({ hit, context }) {
         {context?.overview && (
           <div className="analysis-section">
             <p className="analysis-label">Overview</p>
-            <p className="analysis">{context.overview}</p>
+            <p className="analysis-text">{context.overview}</p>
           </div>
         )}
         {context?.seasonal_concerns && (
           <div className="analysis-section">
             <p className="analysis-label">Seasonal Concerns</p>
-            <p className="analysis">{context.seasonal_concerns}</p>
+            <p className="analysis-text">{context.seasonal_concerns}</p>
           </div>
         )}
         {context?.disruptive_activities && (
           <div className="analysis-section">
             <p className="analysis-label">Disruptive Activities</p>
-            <p className="analysis">{context.disruptive_activities}</p>
+            <p className="analysis-text">{context.disruptive_activities}</p>
           </div>
         )}
         {context?.recommendation && (
           <div className="analysis-section">
             <p className="analysis-label">Planning Recommendation</p>
-            <p className="analysis">{context.recommendation}</p>
+            <p className="analysis-text">{context.recommendation}</p>
           </div>
         )}
         {!context?.overview && !context?.seasonal_concerns && !context?.disruptive_activities && !context?.recommendation && (
-          <p className="analysis">No AI ecological context was returned for this species.</p>
+          <p className="analysis-missing">No ecological context was returned for this species.</p>
         )}
       </div>
-    </article>
+    </div>
   );
 }
 
@@ -726,385 +725,388 @@ function downloadReport(scanData, meta, formValues) {
   URL.revokeObjectURL(url);
 }
 
+
   // Start of page render
   return (
     <>
-    <Toaster
-      position="top-right"
-      toastOptions={{
-        duration: 7000,
-        style: {
-          borderRadius: "12px",
-          padding: "20px 25px",
-          width: "auto",
-          maxWidth: "400px",
-          lineHeight: "1.3",
-          fontSize: "18px",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-        },
-      }}
-    />
-    <div className="page">
-      <header className="hero">
-        <div className="hero-inner">
-          <div className="hero-text">
-            <p className="eyebrow">Illinois Endangered Species · Construction Planning</p>
-            <h1>Environmental Screening</h1>
-            <p className="subtext">
-              Screen a proposed construction site for nearby Illinois endangered species using GBIF occurrence data and AI-assisted ecological planning context.
-            </p>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 7000,
+          style: {
+            fontFamily: "'Figtree', system-ui, sans-serif",
+            borderRadius: "6px",
+            padding: "12px 16px",
+            fontSize: "13px",
+            fontWeight: "500",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+          },
+        }}
+      />
+
+      <div className="app-shell">
+
+        {/* Topbar */}
+        <header className="topbar">
+          <div className="topbar-inner">
+            <div className="topbar-brand">
+              <div className="topbar-mark">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <rect width="10" height="10" rx="1.5" fill="rgba(255,255,255,0.65)" />
+                </svg>
+              </div>
+              <span className="topbar-name">EcoRisk AI</span>
+              <div className="topbar-sep" />
+              <span className="topbar-subtitle">Illinois Endangered Species · Construction Pre-Screen</span>
+            </div>
+            <span className="topbar-pill">Preliminary Screening</span>
           </div>
-          {/* <img src={ourLogo} alt="EnvironScreen" className="hero-logo" /> */}
-        </div>
-      </header>
+        </header>
 
-      <main className="layout">
-        <section className="card">
-          <h2>Project Input</h2>
-          <form onSubmit={handleSubmit} className="form">
-            <div className="mode-toggle">
-              <button
-                type="button"
-                className={inputMode === "address" ? "active" : ""}
-                onClick={() => setInputMode("address")}
-              >
-                Address
-              </button>
-              <button
-                type="button"
-                className={inputMode === "coordinates" ? "active" : ""}
-                onClick={() => setInputMode("coordinates")}
-              >
-                Coordinates
-              </button>
+        {/* Workspace */}
+        <main className="workspace">
+
+          {/* Left: Site Parameters */}
+          <aside className="panel panel-params">
+            <div className="panel-header">
+              <span className="panel-label">Site Parameters</span>
             </div>
 
-              {inputMode === "address" ? (
-              <>
-                <label>Address</label>
-                <input
-                  name="address"
-                  value={form.address}
-                  onChange={updateField}
-                  placeholder="123 Main St, Edwardsville, IL"
-                />
-                <button type="button" className="btn-secondary" onClick={handleAddressLookup} disabled={cooldowns.addressLookup > 0 || lookingUpAddress}>
-                  {lookingUpAddress
-                    ? "Looking up..."
-                    : cooldowns.addressLookup > 0
-                    ? `Try again in ${formatCooldown(cooldowns.addressLookup)}`
-                    : "Find Address"}
-                </button>
+            <form onSubmit={handleSubmit} className="params-form">
 
-                {(form.lat && form.lon) && (
-                  <div className="lookup-preview">
-                    <small>Matched coordinates: {parseFloat(form.lat).toFixed(3)}, {parseFloat(form.lon).toFixed(3)}</small>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <label>Latitude</label>
-                <input
-                  name="lat"
-                  value={form.lat}
-                  onChange={updateField}
-                  placeholder="41.8781"
-                />
-
-                <label>Longitude</label>
-                <input
-                  name="lon"
-                  value={form.lon}
-                  onChange={updateField}
-                  placeholder="-87.6298"
-                />
-
-                <button type="button" className="btn-secondary" onClick={handleCoordinateLookup} disabled={cooldowns.coordinateLookup > 0 || lookingUpCoords}>
-                  {lookingUpCoords
-                    ? "Looking up..."
-                    : cooldowns.coordinateLookup > 0
-                    ? `Try again in ${formatCooldown(cooldowns.coordinateLookup)}`
-                    : "Find Address From Coordinates"}
-                </button>
-
-                {form.address && (
-                  <div className="lookup-preview">
-                    <small>Matched address: {form.address}</small>
-                  </div>
-                )}
-              </>
-            )}
-
-            <label>
-              Radius (miles)
-              <input
-                name="radius_miles"
-                value={form.radius_miles}
-                onChange={updateField}
-                placeholder="7"
-              />
-            </label>
-
-            <button className="button" type="submit" disabled={loading || cooldowns.environmentScan > 0}>
-              {cooldowns.environmentScan > 0
-                ? `Try again in ${formatCooldown(cooldowns.environmentScan)}`
-                : loading
-                ? "Running Screen..."
-                : "Run Environmental Screen"}
-            </button>
-
-            <div ref={turnstileRef} className="captcha-container"></div>
-
-            {/* {error.environmentScan && (
-              <div className="error">
-                {error.environmentScan}
-              </div>
-            )} */}
-          </form>
-          {/* {error && <p>{error}</p>}
-          {loading && <p>{stepText}</p>} */}
-          
-          <div className="helper">
-            <strong>Backend URL:</strong>{" "}
-            {backendUrl || "Not set. Create .env from .env.example first."}
-          </div>
-
-          <div className="disclaimer">
-            ⚠ This tool is intended ONLY as a preliminary environmental screening aid.
-            Results are based on publicly available biodiversity observations through GBIF and AI
-            analysis. They should NOT be considered authoritative regulatory guidance. Always consult 
-            appropriate government agencies and environmental experts before beginning construction activities.
-          </div>
-
-        </section>
-
-        <section className="card">
-          
-
-          {/* {Object.values(error).some(Boolean) && ( // Error above map display
-            <div className="error">
-              {error.general || error.addressLookup || error.coordinateLookup || error.environmentScan}
-            </div>
-          )} */}
-
-          { form.lat && form.lon && ( // !Object.values(error).some(Boolean) - Removes upon error
-            <ScreeningMap
-              lat={Number(form.lat)}
-              lon={Number(form.lon)}
-              radiusMiles={Number(form.radius_miles)}
-
-
-              onPickLocation={async (lat, lon) => {
-                const roundedLat = Number(lat.toFixed(3));
-                const roundedLon = Number(lon.toFixed(3));
-
-                const newKey = `${roundedLat},${roundedLon}`;
-
-                if (lastPickedRef.current === newKey) {
-                  // If the rounded coordinates are the same as current, do nothing
-                  return;
-                }
-                lastPickedRef.current = newKey;
-
-                resetResults();
-                
-                setForm((prev) => ({
-                  ...prev,
-                  lat: roundedLat,
-                  lon: roundedLon,
-                }));
-
-                try {
-                  // 2. call your backend reverse geocode
-                  const response = await fetch(
-                    `${backendUrl}/geocode/reverse?lat=${roundedLat}&lon=${roundedLon}`
-                  );
-
-                  if (!response.ok) return;
-
-                  const data = await response.json();
-
-                  if (!data.best_match) return;
-
-                  const best = data.best_match;
-
-                  // 3. update address AFTER lookup completes
-                  setForm((prev) => ({
-                    ...prev,
-                    lat: roundedLat,
-                    lon: roundedLon,
-                    address: best.label || prev.address,
-                  }));
-                } catch (err) {
-                  // silent fail to not disrupt ux
-                  console.error("Reverse geocode failed", err);
-                }
-              }}
-            />
-          
-          )}
-
-          {loading && (() => {
-            const SCAN_STEPS = [
-              { label: "Validating Human", threshold: 1 },
-              { label: "Loading taxon lookup", threshold: 10 },
-              { label: "Querying GBIF species", threshold: 35 },
-              { label: "Cross-referencing endangered species", threshold: 60 },
-              { label: "Generating AI ecological context", threshold: 86 },
-              { label: "Finalizing results", threshold: 100 },
-            ];
-            return (
-              <div className="progress-box">
-                <h3>Processing scan...</h3>
-                <div className="progress-bar">
-                  <div
-                    className="progress-bar-fill"
-                    style={{ width: `${progress}%` }}
-                  ></div>
-                </div>
-                <ol className="scan-steps">
-                  {SCAN_STEPS.map((step) => {
-                    const isLastStep = step.threshold === 100;
-                    const done = isLastStep
-                      ? progress >= step.threshold && !finalizing
-                      : progress >= step.threshold;
-                    const active = isLastStep
-                      ? finalizing
-                      : !done && SCAN_STEPS.find((s) => progress < s.threshold) === step;
-                    return (
-                      <li
-                        key={step.label}
-                        className={`scan-step ${done ? "scan-step-done" : active ? "scan-step-active" : "scan-step-pending"}`}
-                      >
-                        <span className="scan-step-circle">
-                          {done ? "✓" : active ? <span className="scan-step-spinner" /> : ""}
-                        </span>
-                        <span className="scan-step-label">{step.label}</span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            );
-          })()}
-
-          {!hasScanned && !loading && (
-            <div className="skeleton-placeholder">
-              <div className="skeleton-summary-row">
-                <div className="skeleton"></div>
-                <div className="skeleton"></div>
-                <div className="skeleton"></div>
-              </div>
-              <div className="skeleton-stack">
-                <div className="skeleton skeleton-card"></div>
-                <div className="skeleton skeleton-card"></div>
-              </div>
-            </div>
-          )}
-
-          {loading && (
-            <div className="skeleton-placeholder loading">
-              <div className="skeleton-summary-row">
-                <div className="skeleton"></div>
-                <div className="skeleton"></div>
-                <div className="skeleton"></div>
-              </div>
-              <div className="skeleton-stack">
-                <div className="skeleton skeleton-card"></div>
-                <div className="skeleton skeleton-card"></div>
-              </div>
-            </div>
-          )}
-
-          {!Object.values(error).some(Boolean) && !loading && hasScanned && data?.gbif_hits?.length === 0 && (
-            <div className="success-box">
-              <div className="success-icon">✓</div>
-              <div>
-                <h3>No endangered species detected!</h3>
-                <p>
-                  No Illinois endangered species were identified, from 2015-2026, within the
-                  selected screening area based on the current GBIF query and filtering logic.
-                </p>
-              </div>
-            </div>
-          )}
-
-            
-
-          {!loading && data && hasScanned && (
-            <>
-              <div className="summary">
-                <div className="summary-box warning">
-                  <span className="summary-label" color="yellow">Flagged species</span>
-                  <span className="summary-value">{data.gbif_hits?.length ?? 0}</span>
-                </div>
-                <div className="summary-box">
-                  <span className="summary-label">Total Species Observed</span>
-                  <span className="summary-value">
-                    {data.found_species_count ?? 0}
-                  </span>
-                </div>
-                <div className="summary-box">
-                  <span className="summary-label">Radius</span>
-                  <span className="summary-value">
-                    {data.input?.radius_miles ?? 0} mi
-                  </span>
-                </div>
-              </div>
-
-              {data.gbif_hits?.length > 0 && (
+              <div className="mode-selector">
                 <button
                   type="button"
-                  className="btn-download"
-                  onClick={() => downloadReport(data, scanMeta, form)}
+                  className={`mode-btn${inputMode === "address" ? " active" : ""}`}
+                  onClick={() => setInputMode("address")}
                 >
-                  Download Screening Report
+                  Address
                 </button>
+                <button
+                  type="button"
+                  className={`mode-btn${inputMode === "coordinates" ? " active" : ""}`}
+                  onClick={() => setInputMode("coordinates")}
+                >
+                  Coordinates
+                </button>
+              </div>
+
+              {inputMode === "address" ? (
+                <div className="field-group">
+                  <div className="field">
+                    <label className="field-label">Street Address</label>
+                    <input
+                      className="field-input"
+                      name="address"
+                      value={form.address}
+                      onChange={updateField}
+                      placeholder="123 Main St, Chicago, IL"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-resolve"
+                    onClick={handleAddressLookup}
+                    disabled={cooldowns.addressLookup > 0 || lookingUpAddress}
+                  >
+                    {lookingUpAddress
+                      ? "Locating..."
+                      : cooldowns.addressLookup > 0
+                      ? `Wait ${formatCooldown(cooldowns.addressLookup)}`
+                      : "Resolve Address"}
+                  </button>
+                  {form.lat && form.lon && (
+                    <p className="coord-preview">
+                      {parseFloat(form.lat).toFixed(3)}&deg; N &nbsp;&middot;&nbsp; {parseFloat(form.lon).toFixed(3)}&deg; W
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="field-group">
+                  <div className="field-pair">
+                    <div className="field">
+                      <label className="field-label">Latitude</label>
+                      <input
+                        className="field-input field-input--mono"
+                        name="lat"
+                        value={form.lat}
+                        onChange={updateField}
+                        placeholder="41.878"
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Longitude</label>
+                      <input
+                        className="field-input field-input--mono"
+                        name="lon"
+                        value={form.lon}
+                        onChange={updateField}
+                        placeholder="-87.629"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-resolve"
+                    onClick={handleCoordinateLookup}
+                    disabled={cooldowns.coordinateLookup > 0 || lookingUpCoords}
+                  >
+                    {lookingUpCoords
+                      ? "Resolving..."
+                      : cooldowns.coordinateLookup > 0
+                      ? `Wait ${formatCooldown(cooldowns.coordinateLookup)}`
+                      : "Resolve Coordinates"}
+                  </button>
+                  {form.address && (
+                    <p className="coord-preview">{form.address}</p>
+                  )}
+                </div>
               )}
 
-              <div className="stack">
-                {(data.gbif_hits || []).map((hit) => {
-                  const context = (data.species_context || []).find(
-                    (item) => item.scientific_name === hit.scientific_name
-                  );
-
-                  return <SpeciesCard key={hit.taxon_key} hit={hit} context={context} />;
-                })}
+              <div className="field">
+                <div className="radius-label-row">
+                  <label className="field-label">Search Radius</label>
+                  <span className="radius-value">{form.radius_miles} mi</span>
+                </div>
+                <input
+                  className="radius-slider"
+                  type="range"
+                  name="radius_miles"
+                  min="0"
+                  max="50"
+                  step="1"
+                  value={form.radius_miles}
+                  onChange={updateField}
+                />
               </div>
-            </>
-          )}
-        </section>
-      </main>
-      <footer className="site-footer">
-        <div className="footer-inner">
-          <div className="footer-sources">
-            <span className="footer-sources-label">Powered by</span>
-            <a href="https://www.gbif.org" target="_blank" rel="noreferrer" className="footer-source-link">
-              <img src={gbifLogo} alt="GBIF" className="footer-logo" />
-            </a>
-            <a href="https://naturalheritage.illinois.gov/dataresearch/access-our-data.html" target="_blank" rel="noreferrer" className="footer-source-link">
-              <img src={inhsLogo} alt="Illinois Natural Heritage Survey" className="footer-logo footer-logo-inhs" />
-            </a>
-            <a href="https://www.maptiler.com" target="_blank" rel="noreferrer" className="footer-source-link footer-text-source">
-              <img src={mapTilerLogo} alt="MapTiler" className="footer-logo footer-logo-maptiler" />
-            </a>
-            <a href="https://openai.com" target="_blank" rel="noreferrer" className="footer-source-link footer-text-source">
-              <img src={openAILogo} alt="OpenAI" className="footer-logo footer-logo-openai" />
-            </a>
+
+              <button
+                className="btn-primary"
+                type="submit"
+                disabled={loading || cooldowns.environmentScan > 0}
+              >
+                {cooldowns.environmentScan > 0
+                  ? `Rate limited · ${formatCooldown(cooldowns.environmentScan)}`
+                  : loading
+                  ? "Running Screen..."
+                  : "Run Environmental Screen"}
+              </button>
+
+              <div ref={turnstileRef} className="captcha-container" />
+            </form>
+
+            <div className="panel-footer">
+              <p className="disclaimer-text">
+                ⚠ Preliminary screening only. Results are based on publicly available GBIF occurrence
+                data and AI analysis — not authoritative regulatory guidance. Verify with qualified
+                environmental professionals before construction.
+              </p>
+              <div className="backend-row">
+                <span
+                  className="status-dot"
+                  style={{ background: backendUrl ? "var(--forest-3)" : "var(--red)" }}
+                />
+                <span className="status-text">
+                  {backendUrl || "API not configured — set VITE_API_BASE_URL"}
+                </span>
+              </div>
+            </div>
+          </aside>
+
+          {/* Right: Map + Results */}
+          <section className="panel panel-results">
+
+            {form.lat && form.lon && (
+              <div className="map-section">
+                <div className="map-label-row">
+                  <span className="section-label">Project Site</span>
+                  {scanMeta && (
+                    <span className={`cache-chip ${scanMeta.cached ? "cache-chip--cached" : "cache-chip--live"}`}>
+                      {scanMeta.cached ? "Cached" : "Live"}
+                      {scanMeta.scannedAt
+                        ? ` · ${new Date(scanMeta.scannedAt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        : ""}
+                    </span>
+                  )}
+                </div>
+                <ScreeningMap
+                  lat={Number(form.lat)}
+                  lon={Number(form.lon)}
+                  radiusMiles={Number(form.radius_miles)}
+                  onPickLocation={async (lat, lon) => {
+                    const roundedLat = Number(lat.toFixed(3));
+                    const roundedLon = Number(lon.toFixed(3));
+                    const newKey = `${roundedLat},${roundedLon}`;
+                    if (lastPickedRef.current === newKey) return;
+                    lastPickedRef.current = newKey;
+                    resetResults();
+                    setForm((prev) => ({ ...prev, lat: roundedLat, lon: roundedLon }));
+                    try {
+                      const response = await fetch(`${backendUrl}/geocode/reverse?lat=${roundedLat}&lon=${roundedLon}`);
+                      if (!response.ok) return;
+                      const data = await response.json();
+                      if (!data.best_match) return;
+                      const best = data.best_match;
+                      setForm((prev) => ({ ...prev, lat: roundedLat, lon: roundedLon, address: best.label || prev.address }));
+                    } catch (err) {
+                      console.error("Reverse geocode failed", err);
+                    }
+                  }}
+                />
+              </div>
+            )}
+
+            {loading && (() => {
+              const SCAN_STEPS = [
+                { label: "Validating Human",                  threshold: 1   },
+                { label: "Loading taxon lookup",              threshold: 10  },
+                { label: "Querying GBIF species",             threshold: 35  },
+                { label: "Cross-referencing endangered list", threshold: 60  },
+                { label: "Generating AI ecological context",  threshold: 86  },
+                { label: "Finalizing results",                threshold: 100 },
+              ];
+              return (
+                <div className="scan-monitor">
+                  <div className="monitor-head">
+                    <span className="monitor-title">Processing Scan</span>
+                    <span className="monitor-pct">{progress}%</span>
+                  </div>
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                  </div>
+                  <div className="pipeline">
+                    {SCAN_STEPS.map((step) => {
+                      const isLastStep = step.threshold === 100;
+                      const done = isLastStep
+                        ? progress >= step.threshold && !finalizing
+                        : progress >= step.threshold;
+                      const active = isLastStep
+                        ? finalizing
+                        : !done && SCAN_STEPS.find((s) => progress < s.threshold) === step;
+                      return (
+                        <div
+                          key={step.label}
+                          className={`pipeline-step ${done ? "step-done" : active ? "step-active" : "step-pending"}`}
+                        >
+                          <div className="step-node">{done ? "✓" : ""}</div>
+                          <span className="step-text">{step.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {!hasScanned && !loading && (
+              <div className="skeleton-screen">
+                <div className="skeleton-stats">
+                  <div className="skel skel-stat" />
+                  <div className="skel skel-stat" />
+                  <div className="skel skel-stat" />
+                </div>
+                <div className="skel skel-card" />
+                <div className="skel skel-card" />
+              </div>
+            )}
+
+            {loading && (
+              <div className="skeleton-screen loading">
+                <div className="skeleton-stats">
+                  <div className="skel skel-stat" />
+                  <div className="skel skel-stat" />
+                  <div className="skel skel-stat" />
+                </div>
+                <div className="skel skel-card" />
+                <div className="skel skel-card" />
+              </div>
+            )}
+
+            {!loading && hasScanned && !Object.values(error).some(Boolean) && data?.gbif_hits?.length === 0 && (
+              <div className="result-clear">
+                <div className="clear-icon">✓</div>
+                <div>
+                  <p className="clear-title">No Endangered Species Detected</p>
+                  <p className="clear-text">
+                    No Illinois-listed endangered species were identified within the selected
+                    screening area based on current GBIF occurrence data (2015–2026).
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {!loading && hasScanned && data && (
+              <>
+                <div className="results-bar">
+                  <div className="stats-row">
+                    <div className="stat-item stat-item--warn">
+                      <span className="stat-label">Flagged Species</span>
+                      <span className="stat-value">{data.gbif_hits?.length ?? 0}</span>
+                    </div>
+                    <div className="stat-divider" />
+                    <div className="stat-item">
+                      <span className="stat-label">Total Observed</span>
+                      <span className="stat-value">{data.found_species_count ?? 0}</span>
+                    </div>
+                    <div className="stat-divider" />
+                    <div className="stat-item">
+                      <span className="stat-label">Radius</span>
+                      <span className="stat-value">{data.input?.radius_miles ?? 0} mi</span>
+                    </div>
+                  </div>
+                  {data.gbif_hits?.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn-report"
+                      onClick={() => downloadReport(data, scanMeta, form)}
+                    >
+                      ↓ Download Report
+                    </button>
+                  )}
+                </div>
+
+                <div className="species-list">
+                  {(data.gbif_hits || []).map((hit) => {
+                    const context = (data.species_context || []).find(
+                      (item) => item.scientific_name === hit.scientific_name
+                    );
+                    return <SpeciesCard key={hit.taxon_key} hit={hit} context={context} />;
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+        </main>
+
+        <footer className="site-footer">
+          <div className="footer-inner">
+            <div className="footer-sources">
+              <span className="footer-source-label">Powered by</span>
+              <a href="https://www.gbif.org" target="_blank" rel="noreferrer" className="footer-logo-link">
+                <img src={gbifLogo} alt="GBIF" className="footer-logo" />
+              </a>
+              <a href="https://naturalheritage.illinois.gov/dataresearch/access-our-data.html" target="_blank" rel="noreferrer" className="footer-logo-link">
+                <img src={inhsLogo} alt="Illinois Natural Heritage Survey" className="footer-logo footer-logo--inhs" />
+              </a>
+              <a href="https://www.maptiler.com" target="_blank" rel="noreferrer" className="footer-logo-link">
+                <img src={mapTilerLogo} alt="MapTiler" className="footer-logo footer-logo--maptiler" />
+              </a>
+              <a href="https://openai.com" target="_blank" rel="noreferrer" className="footer-logo-link">
+                <img src={openAILogo} alt="OpenAI" className="footer-logo footer-logo--openai" />
+              </a>
+            </div>
+            <p className="footer-attribution">
+              Map tiles ©{" "}
+              <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noreferrer">MapTiler</a>
+              {" · "}Data ©{" "}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>
+            </p>
+            <p className="footer-note">
+              Preliminary screening only — does not replace official agency review, permitting, or regulatory approval.
+            </p>
           </div>
-          <p className="footer-map-credit">
-            Map tiles ©{" "}
-            <a href="https://www.maptiler.com/copyright/" target="_blank" rel="noreferrer">MapTiler</a>
-            {" · "}Data ©{" "}
-            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>
-          </p>
-          <p className="footer-note">
-            Preliminary screening only — does not replace official agency review, permitting, or regulatory approval.
-          </p>
-        </div>
-      </footer>
-    </div>
+        </footer>
+      </div>
     </>
   );
 }

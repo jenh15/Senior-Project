@@ -1,4 +1,4 @@
-# Endangered Species Detection Prototype
+# EcoRisk AI
 > Authors: Jacob Mitchell    
 > Date: 3/10/26   
 
